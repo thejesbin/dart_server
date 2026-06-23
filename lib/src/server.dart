@@ -87,6 +87,13 @@ class DartServer {
   /// Registers a [handler] for [path] regardless of HTTP method.
   void all(String path, Handler handler) => _router.add('ALL', path, handler);
 
+  /// Registers a [handler] for an arbitrary [method] and [path].
+  ///
+  /// A lower-level escape hatch behind the verb methods above; also used by
+  /// `DartServerFactory` to mount controller routes.
+  void route(String method, String path, Handler handler) =>
+      _router.add(method, path, handler);
+
   /// Sets a custom [ErrorHandler] invoked for any uncaught error. If it is
   /// `null` (the default) the framework's built-in handler is used, which maps
   /// [HttpError] to its status code and everything else to `500`.

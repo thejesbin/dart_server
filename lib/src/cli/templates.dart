@@ -13,7 +13,7 @@ String _render(String template, Map<String, String> vars) {
 }
 
 // ---------------------------------------------------------------------------
-// Project scaffold
+// Project scaffold (modular)
 // ---------------------------------------------------------------------------
 
 String projectPubspec(String pkg, String dependency) => _render(r'''
@@ -53,7 +53,8 @@ include: package:lints/recommended.yaml
 String projectReadme(String pkg) => _render(r'''
 # __PKG__
 
-A [dart_server](https://pub.dev/packages/dart_server) application.
+A [dart_server](https://pub.dev/packages/dart_server) application with a
+NestJS-style modular architecture.
 
 ## Getting started
 
@@ -65,33 +66,43 @@ dart_server prod     # production
 
 The dev dashboard is available at <http://localhost:3000/__dev>.
 
-## Generate code
+## Generate a feature
 
 ```sh
-dart_server make:model User
-dart_server make:repository User
-dart_server make:controller User
-dart_server make:resource Post   # model + repository + controller in one go
-dart_server make:middleware Auth
-dart_server make:service Billing
+dart_server make:resource Post   # model + repository + service + controller + module
 ```
+
+Then register the module in `lib/app_module.dart`:
+
+```dart
+import 'modules/post/post_module.dart';
+
+Module appModule() => Module(
+      imports: [postModule()],
+      controllers: [(i) => AppController()],
+    );
+```
+
+Other generators: `make:module`, `make:controller`, `make:service`,
+`make:repository`, `make:model`, `make:middleware`.
 
 ## Structure
 
 ```
-bin/server.dart        entry point
-lib/app.dart           app wiring (middleware + routes)
-lib/routes/            route registration
-lib/controllers/       request handlers
-lib/models/            data models
-lib/repositories/      data access
+bin/server.dart            entry point (bootstraps AppModule)
+lib/app_module.dart        root module
+lib/app_controller.dart    root controller
+lib/modules/<feature>/     feature modules (module + controller + service + ...)
+lib/middleware/            cross-cutting middleware
 ```
 ''', {'PKG': pkg});
 
 String serverEntry(String pkg) => _render(r'''
 import 'dart:io';
 
-import 'package:__PKG__/app.dart';
+import 'package:dart_server/dart_server.dart';
+
+import 'package:__PKG__/app_module.dart';
 
 /// Application entry point.
 ///
@@ -100,63 +111,51 @@ import 'package:__PKG__/app.dart';
 ///
 ///   dart_server dev      # development
 ///   dart_server prod     # production
-///
-/// You can also run it directly: `dart run bin/server.dart`.
 Future<void> main(List<String> args) async {
-  final app = buildApp();
+  final app = await DartServerFactory.create(appModule());
+
+  // Development dashboard at /__dev — auto-disabled in production.
+  app.useDevTools();
+  app.use(logger());
+  app.use(cors());
+
   final port =
       int.tryParse(Platform.environment['DART_SERVER_PORT'] ?? '') ?? 3000;
   await app.listen(port);
 }
 ''', {'PKG': pkg});
 
-String appDart(String pkg) => _render(r'''
+String appModuleFile(String pkg) => _render(r'''
 import 'package:dart_server/dart_server.dart';
 
-import 'routes/routes.dart';
+import 'app_controller.dart';
 
-/// Builds and configures the application.
-DartServer buildApp() {
-  final app = DartServer();
-
-  // Development dashboard at /__dev — auto-disabled in production.
-  app.useDevTools();
-
-  // Global middleware.
-  app.use(logger());
-  app.use(cors());
-
-  // Routes.
-  registerRoutes(app);
-
-  return app;
-}
+/// The root module.
+///
+/// As your app grows, import feature modules here, e.g.:
+///
+///   import 'modules/post/post_module.dart';
+///   Module appModule() => Module(
+///         imports: [postModule()],
+///         controllers: [(i) => AppController()],
+///       );
+Module appModule() => Module(
+      controllers: [(i) => AppController()],
+    );
 ''', {'PKG': pkg});
 
-String routesDart(String pkg) => _render(r'''
-import 'package:dart_server/dart_server.dart';
-
-import '../controllers/home_controller.dart';
-
-/// Registers all application routes.
-void registerRoutes(DartServer app) {
-  final home = HomeController();
-
-  app.get('/', home.index);
-  app.get('/health', (req) => Response.json({'status': 'ok'}));
-}
-''', {'PKG': pkg});
-
-String homeController(String pkg) => _render(r'''
+String appControllerFile(String pkg) => _render(r'''
 import 'package:dart_server/dart_server.dart';
 
 /// Handles requests to the application root.
-class HomeController {
-  Response index(Request req) {
-    return Response.json({
-      'app': '__PKG__',
-      'message': 'Your dart_server app is running 🎉',
-    });
+class AppController extends Controller {
+  @override
+  void register(RouteRegistrar routes) {
+    routes.get('/', (req) => Response.json({
+          'app': '__PKG__',
+          'message': 'Your dart_server app is running 🎉',
+        }));
+    routes.get('/health', (req) => Response.json({'status': 'ok'}));
   }
 }
 ''', {'PKG': pkg});
@@ -197,85 +196,110 @@ class __CLASS__ {
 }
 ''', {'CLASS': className});
 
-String controllerFile(String className, String varName, String snake) =>
-    _render(r'''
+/// Standalone controller (a [Controller] subclass with stub handlers).
+String controllerFile(String className, String snake) => _render(r'''
 import 'package:dart_server/dart_server.dart';
 
 /// HTTP handlers for __CLASS__ resources.
 ///
-/// Wire these up in `lib/routes/routes.dart`:
-///
-///   final __VAR__ = __CLASS__Controller();
-///   app.get('/__SNAKE__s', __VAR__.index);
-///   app.get('/__SNAKE__s/:id', __VAR__.show);
-///   app.post('/__SNAKE__s', __VAR__.store);
-///   app.put('/__SNAKE__s/:id', __VAR__.update);
-///   app.delete('/__SNAKE__s/:id', __VAR__.destroy);
-class __CLASS__Controller {
-  /// GET /__SNAKE__s
-  Future<Response> index(Request req) async {
-    return Response.json({'data': <Object>[]});
+/// Provide it from a module's `controllers`, e.g.:
+///   controllers: [(i) => __CLASS__Controller()]
+class __CLASS__Controller extends Controller {
+  @override
+  String get basePath => '/__SNAKE__s';
+
+  @override
+  void register(RouteRegistrar routes) {
+    routes.get('/', index);
+    routes.get('/:id', show);
+    routes.post('/', store);
+    routes.put('/:id', update);
+    routes.delete('/:id', destroy);
   }
 
-  /// GET /__SNAKE__s/:id
-  Future<Response> show(Request req) async {
-    final id = req.params['id'];
-    return Response.json({'id': id});
-  }
+  Future<Response> index(Request req) async =>
+      Response.json({'data': <Object>[]});
 
-  /// POST /__SNAKE__s
+  Future<Response> show(Request req) async =>
+      Response.json({'id': req.params['id']});
+
   Future<Response> store(Request req) async {
     final body = await req.json();
     return Response.status(201, {'created': body});
   }
 
-  /// PUT /__SNAKE__s/:id
   Future<Response> update(Request req) async {
-    final id = req.params['id'];
     final body = await req.json();
-    return Response.json({'id': id, 'updated': body});
+    return Response.json({'id': req.params['id'], 'updated': body});
   }
 
-  /// DELETE /__SNAKE__s/:id
-  Future<Response> destroy(Request req) async {
-    return Response.status(204);
-  }
+  Future<Response> destroy(Request req) async => Response.status(204);
 }
-''', {'CLASS': className, 'VAR': varName, 'SNAKE': snake});
+''', {'CLASS': className, 'SNAKE': snake});
 
+/// Standalone service stub.
+String serviceFile(String className) => _render(r'''
+/// __CLASS__ service — application/business logic for __CLASS__.
+///
+/// Provide it from a module:
+///   providers: [Provider.singleton((i) => __CLASS__Service())]
+class __CLASS__Service {
+  __CLASS__Service();
+
+  // TODO: implement service methods.
+}
+''', {'CLASS': className});
+
+/// Standalone repository (model-backed in-memory data access).
 String repositoryFile(String className, String snake) => _render(r'''
-import '../models/__SNAKE__.dart';
+import '__SNAKE__.dart';
 
 /// In-memory data access for [__CLASS__].
-///
-/// Swap the internals for a real database when you're ready — keep the method
-/// signatures stable and callers won't need to change.
 class __CLASS__Repository {
   final List<__CLASS__> _items = [];
   int _nextId = 1;
 
-  Future<List<__CLASS__>> all() async => List.unmodifiable(_items);
+  List<__CLASS__> all() => List.unmodifiable(_items);
 
-  Future<__CLASS__?> find(int id) async {
+  __CLASS__? find(int id) {
     for (final item in _items) {
       if (item.id == id) return item;
     }
     return null;
   }
 
-  Future<__CLASS__> create(__CLASS__ model) async {
-    final created = model.copyWith(id: _nextId++);
+  __CLASS__ create(__CLASS__ input) {
+    final created = input.copyWith(id: _nextId++);
     _items.add(created);
     return created;
   }
 
-  Future<bool> delete(int id) async {
+  bool delete(int id) {
     final before = _items.length;
     _items.removeWhere((item) => item.id == id);
     return _items.length != before;
   }
 }
 ''', {'CLASS': className, 'SNAKE': snake});
+
+/// Standalone, minimal module (commented wiring to fill in).
+String moduleFile(String className, String varName) => _render(r'''
+import 'package:dart_server/dart_server.dart';
+
+/// __CLASS__ module.
+///
+/// Register it in lib/app_module.dart:
+///   Module appModule() => Module(imports: [__VAR__Module()], ...);
+Module __VAR__Module() => Module(
+      providers: [
+        // Provider.singleton((i) => __CLASS__Service()),
+      ],
+      controllers: [
+        // (i) => __CLASS__Controller(i.get<__CLASS__Service>()),
+      ],
+      // exports: [__CLASS__Service],
+    );
+''', {'CLASS': className, 'VAR': varName});
 
 String middlewareFile(String className, String varName) => _render(r'''
 import 'package:dart_server/dart_server.dart';
@@ -291,13 +315,127 @@ Middleware __VAR__Middleware() {
 }
 ''', {'CLASS': className, 'VAR': varName});
 
-String serviceFile(String className) => _render(r'''
-/// __CLASS__ service — application/business logic for __CLASS__.
-///
-/// Inject the repositories/services it needs via the constructor.
-class __CLASS__Service {
-  const __CLASS__Service();
+// ---------------------------------------------------------------------------
+// Resource (full feature: model + repository + service + controller + module)
+// ---------------------------------------------------------------------------
 
-  // TODO: implement service methods.
+String resourceRepositoryFile(String className, String snake) => _render(r'''
+import '__SNAKE__.dart';
+
+/// In-memory data access for [__CLASS__].
+class __CLASS__Repository {
+  final List<__CLASS__> _items = [];
+  int _nextId = 1;
+
+  List<__CLASS__> all() => List.unmodifiable(_items);
+
+  __CLASS__? find(int id) {
+    for (final item in _items) {
+      if (item.id == id) return item;
+    }
+    return null;
+  }
+
+  __CLASS__ create(__CLASS__ input) {
+    final created = input.copyWith(id: _nextId++);
+    _items.add(created);
+    return created;
+  }
+
+  bool delete(int id) {
+    final before = _items.length;
+    _items.removeWhere((item) => item.id == id);
+    return _items.length != before;
+  }
 }
-''', {'CLASS': className});
+''', {'CLASS': className, 'SNAKE': snake});
+
+String resourceServiceFile(String className, String snake) => _render(r'''
+import '__SNAKE__.dart';
+import '__SNAKE___repository.dart';
+
+/// Business logic for [__CLASS__], delegating storage to [__CLASS__Repository].
+class __CLASS__Service {
+  __CLASS__Service(this._repository);
+
+  final __CLASS__Repository _repository;
+
+  List<__CLASS__> all() => _repository.all();
+
+  __CLASS__? find(int id) => _repository.find(id);
+
+  __CLASS__ create(__CLASS__ input) => _repository.create(input);
+
+  bool delete(int id) => _repository.delete(id);
+}
+''', {'CLASS': className, 'SNAKE': snake});
+
+String resourceControllerFile(String className, String snake) => _render(r'''
+import 'package:dart_server/dart_server.dart';
+
+import '__SNAKE__.dart';
+import '__SNAKE___service.dart';
+
+/// HTTP handlers for __CLASS__ resources, backed by [__CLASS__Service].
+class __CLASS__Controller extends Controller {
+  __CLASS__Controller(this._service);
+
+  final __CLASS__Service _service;
+
+  @override
+  String get basePath => '/__SNAKE__s';
+
+  @override
+  void register(RouteRegistrar routes) {
+    routes.get('/', index);
+    routes.get('/:id', show);
+    routes.post('/', store);
+    routes.delete('/:id', destroy);
+  }
+
+  Future<Response> index(Request req) async => Response.json(
+      {'data': _service.all().map((item) => item.toJson()).toList()});
+
+  Future<Response> show(Request req) async {
+    final item = _service.find(_id(req));
+    if (item == null) throw HttpError.notFound('__CLASS__ not found');
+    return Response.json(item.toJson());
+  }
+
+  Future<Response> store(Request req) async {
+    final body = await req.json() as Map<String, dynamic>;
+    final created = _service.create(__CLASS__.fromJson(body));
+    return Response.status(201, created.toJson());
+  }
+
+  Future<Response> destroy(Request req) async {
+    if (!_service.delete(_id(req))) {
+      throw HttpError.notFound('__CLASS__ not found');
+    }
+    return Response.status(204);
+  }
+
+  int _id(Request req) => int.tryParse(req.params['id'] ?? '') ?? -1;
+}
+''', {'CLASS': className, 'SNAKE': snake});
+
+String resourceModuleFile(String className, String varName, String snake) =>
+    _render(r'''
+import 'package:dart_server/dart_server.dart';
+
+import '__SNAKE___controller.dart';
+import '__SNAKE___repository.dart';
+import '__SNAKE___service.dart';
+
+/// __CLASS__ feature module. Add `__VAR__Module()` to your AppModule imports.
+Module __VAR__Module() => Module(
+      providers: [
+        Provider.singleton((i) => __CLASS__Repository()),
+        Provider.singleton((i) => __CLASS__Service(i.get<__CLASS__Repository>())),
+      ],
+      controllers: [
+        (i) => __CLASS__Controller(i.get<__CLASS__Service>()),
+      ],
+      exports: [__CLASS__Service],
+    );
+''', {'CLASS': className, 'VAR': varName, 'SNAKE': snake});

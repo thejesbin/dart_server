@@ -31,6 +31,7 @@ void main() async {
 
 ## Features
 
+- 🧩 **Modular architecture** — NestJS-style modules, controllers & dependency injection (optional)
 - 🚏 **Express-style routing** — `get` / `post` / `put` / `delete` / `patch` / `head` / `options` / `all`
 - 🔖 **Path params & wildcards** — `/users/:id`, `/files/*`
 - 🧅 **Middleware** — composable `(req, next)` chain with per-request `context`
@@ -320,6 +321,83 @@ whose real target escapes the root — are rejected with `403`.
 
 ---
 
+## Modular architecture
+
+For larger apps, dart_server offers an optional **NestJS-style** layer:
+**modules** that group **controllers** and **providers** (services), wired
+together with **dependency injection**. It's plain Dart — no decorators,
+reflection or code generation — so wiring is explicit and analyzable.
+
+```dart
+import 'package:dart_server/dart_server.dart';
+
+// A provider (service) — just a class.
+class UsersService {
+  final _users = [{'id': '1', 'name': 'Ada'}];
+  List<Map<String, String>> all() => _users;
+}
+
+// A controller — groups routes under a base path, deps via the constructor.
+class UsersController extends Controller {
+  UsersController(this._users);
+  final UsersService _users;
+
+  @override
+  String get basePath => '/users';
+
+  @override
+  void register(RouteRegistrar routes) {
+    routes.get('/', (req) => Response.json(_users.all()));
+  }
+}
+
+// A module wires providers + controllers and exports what others may inject.
+Module usersModule() => Module(
+      providers: [Provider.singleton((i) => UsersService())],
+      controllers: [(i) => UsersController(i.get<UsersService>())],
+      exports: [UsersService],
+    );
+
+Module appModule() => Module(imports: [usersModule()]);
+
+Future<void> main() async {
+  final app = await DartServerFactory.create(appModule());
+  app.use(logger());
+  await app.listen(3000);
+}
+```
+
+**Providers / DI.** `Provider.singleton((i) => …)` (one shared instance),
+`Provider.transient((i) => …)` (new each time) and `Provider.value(instance)`.
+Resolve dependencies with `i.get<T>()`. The container instantiates everything
+up front, so missing providers and circular dependencies fail fast with a
+`DiError`.
+
+**Encapsulation.** A module can only inject providers it declares itself or that
+an imported module `exports`. Mark a module `isGlobal: true` to expose its
+exports everywhere.
+
+**Lifecycle.** A provider or controller implementing `OnInit` has its
+`onInit()` awaited during bootstrap (in dependency order) — handy for opening
+connections.
+
+**Controllers.** Extend `Controller`, set `basePath`, and declare routes in
+`register(RouteRegistrar)`. The factory mounts each route at
+`basePath + path`.
+
+The CLI scaffolds and generates this structure for you:
+
+```sh
+dart_server create shop
+dart_server make:resource Product   # model + repository + service + controller + module
+```
+
+The manual `DartServer()` API and the modular layer are fully interoperable —
+the factory returns an ordinary `DartServer`, so you can still add middleware,
+`useDevTools()`, or extra routes on it.
+
+---
+
 ## Dev tools
 
 A built-in development dashboard that tracks your API as you build it — recent
@@ -372,6 +450,10 @@ lib/
      ├── middleware.dart     # typedefs + logger/cors/serveStatic
      ├── dev_tools.dart      # in-memory request tracker + dashboard
      ├── errors.dart         # HttpError
+     ├── module.dart         # Module, Provider, Injector, OnInit (DI model)
+     ├── di_container.dart   # module graph + encapsulated DI resolution
+     ├── controller.dart     # Controller base + RouteRegistrar
+     ├── factory.dart        # DartServerFactory (modular bootstrap)
      ├── utils.dart          # path & MIME helpers
      └── cli/                # CLI: scaffolding, generators, dev/prod runner
 example/

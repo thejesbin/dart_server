@@ -87,11 +87,9 @@ Future<int> _create(Console console, _Args args) async {
     'analysis_options.yaml': templates.projectAnalysisOptions(),
     'README.md': templates.projectReadme(pkg),
     'bin/server.dart': templates.serverEntry(pkg),
-    'lib/app.dart': templates.appDart(pkg),
-    'lib/routes/routes.dart': templates.routesDart(pkg),
-    'lib/controllers/home_controller.dart': templates.homeController(pkg),
-    'lib/models/.gitkeep': '',
-    'lib/repositories/.gitkeep': '',
+    'lib/app_module.dart': templates.appModuleFile(pkg),
+    'lib/app_controller.dart': templates.appControllerFile(pkg),
+    'lib/modules/.gitkeep': '',
   };
 
   files.forEach((relative, content) {
@@ -150,42 +148,43 @@ Future<int> _make(Console console, String type, _Args args) async {
       return _emitMiddleware(console, root, args, rawName);
     case 'service':
       return _emitService(console, root, args, rawName);
+    case 'module':
+      return _emitModule(console, root, args, rawName);
     case 'resource':
-      final results = [
-        _emitModel(console, root, args, rawName),
-        _emitRepository(console, root, args, rawName),
-        _emitController(console, root, args, rawName),
-      ];
-      return results.every((code) => code == 0) ? 0 : 1;
+      return _emitResource(console, root, args, rawName);
     default:
       console.error('Unknown generator: make:$type');
-      console.info('Available: model, controller, repository, middleware, '
-          'service, resource');
+      console.info('Available: model, controller, repository, service, '
+          'module, middleware, resource');
       return 64;
   }
 }
 
+/// Feature folder for a resource, e.g. `lib/modules/post`.
+String _featureDir(String base) => 'lib/modules/${toSnakeCase(base)}';
+
 int _emitModel(Console console, String root, _Args args, String name) {
   final base = _stripSuffix(name, const ['model']);
+  final snake = toSnakeCase(base);
   return _write(console, root, args,
-      relative: 'lib/models/${toSnakeCase(base)}.dart',
+      relative: '${_featureDir(base)}/$snake.dart',
       content: templates.modelFile(toPascalCase(base)));
 }
 
 int _emitController(Console console, String root, _Args args, String name) {
   final base = _stripSuffix(name, const ['controller']);
+  final snake = toSnakeCase(base);
   return _write(console, root, args,
-      relative: 'lib/controllers/${toSnakeCase(base)}_controller.dart',
-      content: templates.controllerFile(
-          toPascalCase(base), toCamelCase(base), toSnakeCase(base)));
+      relative: '${_featureDir(base)}/${snake}_controller.dart',
+      content: templates.controllerFile(toPascalCase(base), snake));
 }
 
 int _emitRepository(Console console, String root, _Args args, String name) {
   final base = _stripSuffix(name, const ['repository']);
+  final snake = toSnakeCase(base);
   return _write(console, root, args,
-      relative: 'lib/repositories/${toSnakeCase(base)}_repository.dart',
-      content:
-          templates.repositoryFile(toPascalCase(base), toSnakeCase(base)));
+      relative: '${_featureDir(base)}/${snake}_repository.dart',
+      content: templates.repositoryFile(toPascalCase(base), snake));
 }
 
 int _emitMiddleware(Console console, String root, _Args args, String name) {
@@ -199,8 +198,55 @@ int _emitMiddleware(Console console, String root, _Args args, String name) {
 int _emitService(Console console, String root, _Args args, String name) {
   final base = _stripSuffix(name, const ['service']);
   return _write(console, root, args,
-      relative: 'lib/services/${toSnakeCase(base)}_service.dart',
+      relative: '${_featureDir(base)}/${toSnakeCase(base)}_service.dart',
       content: templates.serviceFile(toPascalCase(base)));
+}
+
+int _emitModule(Console console, String root, _Args args, String name) {
+  final base = _stripSuffix(name, const ['module']);
+  final result = _write(console, root, args,
+      relative: '${_featureDir(base)}/${toSnakeCase(base)}_module.dart',
+      content: templates.moduleFile(toPascalCase(base), toCamelCase(base)));
+  if (result == 0) _registerHint(console, base);
+  return result;
+}
+
+int _emitResource(Console console, String root, _Args args, String name) {
+  final base = _stripSuffix(name, const ['resource']);
+  final dir = _featureDir(base);
+  final pascal = toPascalCase(base);
+  final camel = toCamelCase(base);
+  final snake = toSnakeCase(base);
+
+  final results = [
+    _write(console, root, args,
+        relative: '$dir/$snake.dart', content: templates.modelFile(pascal)),
+    _write(console, root, args,
+        relative: '$dir/${snake}_repository.dart',
+        content: templates.resourceRepositoryFile(pascal, snake)),
+    _write(console, root, args,
+        relative: '$dir/${snake}_service.dart',
+        content: templates.resourceServiceFile(pascal, snake)),
+    _write(console, root, args,
+        relative: '$dir/${snake}_controller.dart',
+        content: templates.resourceControllerFile(pascal, snake)),
+    _write(console, root, args,
+        relative: '$dir/${snake}_module.dart',
+        content: templates.resourceModuleFile(pascal, camel, snake)),
+  ];
+  if (results.any((code) => code == 0)) _registerHint(console, base);
+  return results.every((code) => code == 0) ? 0 : 1;
+}
+
+/// Reminds the user to wire a new module into the root AppModule.
+void _registerHint(Console console, String base) {
+  final snake = toSnakeCase(base);
+  final camel = toCamelCase(base);
+  console.info('');
+  console.step('Register it in lib/app_module.dart:');
+  console.info("  import 'modules/$snake/${snake}_module.dart';");
+  console.info('  Module appModule() => Module(imports: [${camel}Module()], '
+      'controllers: [(i) => AppController()]);');
 }
 
 int _write(
@@ -397,13 +443,15 @@ ${b('Project')}
   prod  [--port <n>] [--entry <file>]
                          Run in production
 
-${b('Generators')}
-  make:model <Name>        Create a model        (lib/models)
-  make:controller <Name>   Create a controller   (lib/controllers)
-  make:repository <Name>   Create a repository   (lib/repositories)
-  make:middleware <Name>   Create a middleware    (lib/middleware)
-  make:service <Name>      Create a service      (lib/services)
-  make:resource <Name>     Create model + repository + controller
+${b('Generators')}  ${console.dim('(feature files go in lib/modules/<name>/)')}
+  make:resource <Name>     Full feature: model + repository + service +
+                           controller + module
+  make:module <Name>       Create a module
+  make:controller <Name>   Create a controller
+  make:service <Name>      Create a service
+  make:repository <Name>   Create a repository
+  make:model <Name>        Create a model
+  make:middleware <Name>   Create a middleware   (lib/middleware)
   ${console.dim('(add --force to overwrite an existing file)')}
 
 ${b('Other')}

@@ -4,6 +4,23 @@
 
 Initial release.
 
+### Modular architecture (NestJS-style, optional)
+
+- `Module` — groups `providers` and `controllers`, with `imports`/`exports` and
+  per-module provider encapsulation (plus `isGlobal`).
+- `Provider` — dependency injection with `singleton`, `transient` and `value`
+  scopes, resolved via `Injector.get<T>()`; missing providers and circular
+  dependencies fail fast with `DiError`.
+- `Controller` — class-based route grouping under a `basePath` via
+  `RouteRegistrar`, with constructor injection.
+- `OnInit` — async lifecycle hook awaited during bootstrap in dependency order.
+- `DartServerFactory.create(rootModule)` — wires the graph and mounts every
+  controller's routes; returns an ordinary `DartServer`.
+- No decorators, reflection or codegen — wiring is plain, analyzable Dart.
+- CLI: `dart_server create` scaffolds a modular app; `make:resource` /
+  `make:module` / `make:controller` / `make:service` / `make:repository` /
+  `make:model` generate feature modules under `lib/modules/<name>/`.
+
 ### Routing & requests
 
 - Express-style `DartServer` with `get`/`post`/`put`/`delete`/`patch`/`head`/`options`/`all`.

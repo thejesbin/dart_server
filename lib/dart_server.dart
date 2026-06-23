@@ -24,9 +24,13 @@
 /// ```
 library dart_server;
 
+export 'src/controller.dart' show Controller, RouteRegistrar, RouteEntry;
 export 'src/dev_tools.dart' show DevTools, RequestRecord;
 export 'src/errors.dart';
+export 'src/factory.dart' show DartServerFactory;
 export 'src/middleware.dart' show Handler, Next, Middleware, ErrorHandler, logger, cors, serveStatic;
+export 'src/module.dart'
+    show Module, Provider, ProviderScope, ControllerFactory, Injector, DiError, OnInit;
 export 'src/request.dart';
 export 'src/response.dart';
 export 'src/server.dart';
