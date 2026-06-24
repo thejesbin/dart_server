@@ -1,8 +1,9 @@
 # dart_server
 
-A lightweight, **Express.js-like** HTTP server framework for Dart. Build REST
-APIs with familiar routing, middleware and JSON helpers — using only the Dart
-SDK. **Zero external runtime dependencies.**
+A lightweight, **Express.js-like** HTTP server framework for Dart with an
+optional **NestJS-style** modular layer. Build REST APIs with familiar routing,
+middleware and JSON helpers — using only the Dart SDK. **Zero external runtime
+dependencies.**
 
 ```dart
 import 'package:dart_server/dart_server.dart';
@@ -31,17 +32,27 @@ void main() async {
 
 ## Features
 
-- 🧩 **Modular architecture** — NestJS-style modules, controllers & dependency injection (optional)
 - 🚏 **Express-style routing** — `get` / `post` / `put` / `delete` / `patch` / `head` / `options` / `all`
 - 🔖 **Path params & wildcards** — `/users/:id`, `/files/*`
 - 🧅 **Middleware** — composable `(req, next)` chain with per-request `context`
 - 📦 **JSON in/out** — `await req.json()` and `Response.json(...)` with correct headers
 - 🔍 **Query parsing** — `req.query['q']`
-- 💥 **Global error handling** — throw `HttpError(404, '...')`, get JSON back
+- 💥 **Global error handling** — throw `HttpError.notFound('...')`, get JSON back
 - 🎁 **Bundled middleware** — `logger()`, `cors()`, `serveStatic()`
+- 🧩 **Modular architecture** — NestJS-style modules, controllers & dependency injection (optional)
 - 🛠️ **Dev dashboard** — built-in request tracker at `/__dev` (dev only)
-- ⚡ **CLI** — scaffold projects, run dev/prod, generate models/controllers/repositories
+- ⚡ **CLI** — scaffold projects, run dev/prod, generate modules/controllers/services
 - 🪶 **No dependencies** — built on `dart:io` + `dart:convert`, null-safe
+
+## Contents
+
+- [Installation](#installation)
+- [Usage](#usage) — routing, request, response, middleware, errors
+- [Bundled middleware](#bundled-middleware) — logging, CORS, static files
+- [Modular architecture](#modular-architecture) — modules, controllers, DI
+- [CLI](#cli) — scaffold, run, generate
+- [Dev tools](#dev-tools) — the development dashboard
+- [Project structure](#project-structure)
 
 ---
 
@@ -62,68 +73,6 @@ dart pub get
 ```
 
 Requires Dart SDK `^3.0.0`.
-
----
-
-## CLI
-
-`dart_server` ships a command-line tool that scaffolds projects, runs them in
-dev/prod, and generates models, controllers, repositories and more.
-
-Install it on your `PATH`:
-
-```sh
-dart pub global activate dart_server
-# or, from a checkout:  dart pub global activate --source path .
-```
-
-(You can also run it without installing, from inside a project that depends on
-dart_server: `dart run dart_server:dart_server <command>`.)
-
-### Create a project
-
-```sh
-dart_server create blog          # scaffolds ./blog and runs `dart pub get`
-cd blog
-```
-
-You get a ready-to-run app:
-
-```text
-bin/server.dart        entry point (reads DART_SERVER_PORT)
-lib/app.dart           app wiring: dev dashboard + logger + cors + routes
-lib/routes/routes.dart route registration
-lib/controllers/       request handlers (HomeController to start)
-lib/models/            data models
-lib/repositories/      data access
-```
-
-### Run
-
-```sh
-dart_server dev          # development: dev dashboard at /__dev + auto-restart
-dart_server dev --port 8080
-dart_server prod         # production: dashboard off, no watch
-```
-
-`dev` sets `DART_SERVER_ENV=development` and restarts the server whenever a
-`.dart` file under `lib/` or `bin/` changes; `prod` sets it to `production`.
-
-### Generate code
-
-```sh
-dart_server make:model User          # lib/models/user.dart           -> class User
-dart_server make:repository User      # lib/repositories/user_repository.dart
-dart_server make:controller User      # lib/controllers/user_controller.dart  (REST handlers)
-dart_server make:middleware Auth      # lib/middleware/auth_middleware.dart
-dart_server make:service Billing      # lib/services/billing_service.dart
-dart_server make:resource Post        # model + repository + controller at once
-```
-
-Names are normalized, so `make:controller user_account`,
-`make:controller UserAccount` and `make:controller UserAccountController` all
-produce `UserAccountController` in `user_account_controller.dart`. Add `--force`
-to overwrite an existing file.
 
 ---
 
@@ -178,18 +127,20 @@ app.get('/files/*', (req) => Response.text('path: ${req.params['*']}'));
 
 ### The Request object
 
-| Member            | Description                                              |
-| ----------------- | ------------------------------------------------------- |
-| `req.method`      | HTTP method, upper-cased (`GET`, `POST`, …)             |
-| `req.path`        | Path without the query string                           |
-| `req.headers`     | Lower-cased header map                                   |
-| `req.query`       | Parsed query string (`?q=dart` → `{'q': 'dart'}`)       |
-| `req.params`      | Route parameters (`/users/:id` → `{'id': '42'}`)        |
-| `req.bodyBytes`   | Raw body bytes, always preserved (use for binary/uploads)|
-| `req.body`        | Body decoded as UTF-8 (invalid bytes → U+FFFD, never throws)|
-| `await req.json()`| Parsed (and cached) JSON body; `null` for an empty body; re-throws `FormatException` on every call for invalid JSON |
-| `req.context`     | Per-request scratch space shared across middleware      |
-| `req.raw`         | The underlying `HttpRequest` for advanced needs         |
+| Member             | Description                                                       |
+| ------------------ | ----------------------------------------------------------------- |
+| `req.method`       | HTTP method, upper-cased (`GET`, `POST`, …)                       |
+| `req.path`         | Path without the query string                                     |
+| `req.headers`      | Lower-cased header map                                            |
+| `req.query`        | Parsed query string (`?q=dart` → `{'q': 'dart'}`)                 |
+| `req.params`       | Route parameters (`/users/:id` → `{'id': '42'}`)                  |
+| `req.bodyBytes`    | Raw body bytes, always preserved (binary / uploads)               |
+| `req.body`         | Body decoded as UTF-8 (invalid bytes → U+FFFD, never throws)      |
+| `await req.json()` | Parsed, cached JSON body; `null` if empty; throws if invalid JSON |
+| `req.contentType`  | Value of the `Content-Type` header, or `null` if absent           |
+| `req.isJson`       | `true` when `Content-Type` contains `application/json`            |
+| `req.context`      | Per-request scratch space shared across middleware                |
+| `req.raw`          | The underlying `HttpRequest` for advanced needs                   |
 
 ```dart
 app.post('/login', (req) async {
@@ -297,9 +248,10 @@ app.use(cors(                                       // credentialed allow-list
 ));
 ```
 
-Browser pre-flights (an `OPTIONS` with `Access-Control-Request-Method`) are
-answered automatically with `204`; other `OPTIONS` requests fall through to any
-route you registered with `app.options(...)`.
+`cors()` also accepts `methods`, `exposedHeaders` and `maxAge`. Browser
+pre-flights (an `OPTIONS` with `Access-Control-Request-Method`) are answered
+automatically with `204`; other `OPTIONS` requests fall through to any route you
+registered with `app.options(...)`.
 
 > **Security note:** combining `credentials: true` with the default wildcard
 > origin (`*`) is refused with an `ArgumentError`, because reflecting an
@@ -382,19 +334,93 @@ exports everywhere.
 connections.
 
 **Controllers.** Extend `Controller`, set `basePath`, and declare routes in
-`register(RouteRegistrar)`. The factory mounts each route at
-`basePath + path`.
-
-The CLI scaffolds and generates this structure for you:
-
-```sh
-dart_server create shop
-dart_server make:resource Product   # model + repository + service + controller + module
-```
+`register(RouteRegistrar)`. The factory mounts each route at `basePath + path`.
 
 The manual `DartServer()` API and the modular layer are fully interoperable —
-the factory returns an ordinary `DartServer`, so you can still add middleware,
-`useDevTools()`, or extra routes on it.
+`DartServerFactory.create` returns an ordinary `DartServer`, so you can still
+add middleware, `useDevTools()`, or extra routes on it. The [CLI](#cli)
+scaffolds and generates this structure for you.
+
+---
+
+## CLI
+
+`dart_server` ships a command-line tool that scaffolds modular projects, runs
+them in dev/prod, and generates modules, controllers, services and more.
+
+Install it on your `PATH`:
+
+```sh
+dart pub global activate dart_server
+# or, from a checkout:  dart pub global activate --source path .
+```
+
+(You can also run it without installing, from inside a project that depends on
+dart_server: `dart run dart_server:dart_server <command>`.)
+
+### Create a project
+
+```sh
+dart_server create blog          # scaffolds ./blog and runs `dart pub get`
+cd blog
+```
+
+You get a ready-to-run modular app:
+
+```text
+bin/server.dart          entry point — bootstraps appModule() via DartServerFactory,
+                         wires dev dashboard + logger + cors, reads DART_SERVER_PORT (default 3000)
+lib/app_module.dart      the root Module (appModule()) — import feature modules here
+lib/app_controller.dart  AppController — serves GET / and GET /health
+lib/modules/             feature modules (added by make:resource / make:module)
+pubspec.yaml  analysis_options.yaml  .gitignore  README.md
+```
+
+`create` (alias `new`) accepts `--local <path>` to depend on a local
+dart_server checkout (path dependency) instead of the published `^1.0.0`,
+`--force` to scaffold into a non-empty directory, and `--no-pub-get` to skip the
+automatic `dart pub get`.
+
+### Run
+
+```sh
+dart_server dev  [--port <n>] [--entry <file>] [--no-watch]   # development
+dart_server prod [--port <n>] [--entry <file>]                # production
+dart_server run  [--prod] [--port <n>] [--entry <file>]       # dev by default
+```
+
+- `dev` (and `run` without `--prod`) sets `DART_SERVER_ENV=development` and
+  restarts the server whenever a `.dart` file under `lib/` or `bin/` changes.
+  `--no-watch` disables auto-restart.
+- `prod` (and `run --prod`) sets it to `production`; production never watches.
+- `--entry <file>` overrides the entry point (default `bin/server.dart`);
+  `--port <n>` sets `DART_SERVER_PORT`.
+
+### Generate code
+
+Feature files are generated under `lib/modules/<name>/`:
+
+```sh
+dart_server make:resource Post    # model + repository + service + controller + module
+dart_server make:module Order     # lib/modules/order/order_module.dart
+dart_server make:controller User  # lib/modules/user/user_controller.dart  (REST handlers)
+dart_server make:service Billing  # lib/modules/billing/billing_service.dart
+dart_server make:repository User  # lib/modules/user/user_repository.dart
+dart_server make:model User       # lib/modules/user/user.dart             -> class User
+
+# Cross-cutting middleware lives outside the feature folders:
+dart_server make:middleware Auth  # lib/middleware/auth_middleware.dart
+```
+
+`make:resource` generates five wired files (model → repository → service →
+controller → module). After `make:module` / `make:resource` the CLI prints a
+reminder to register the new module in `lib/app_module.dart`.
+
+Names are normalized, so `make:controller user_account`,
+`make:controller UserAccount` and `make:controller UserAccountController` all
+produce class `UserAccountController` in
+`lib/modules/user_account/user_account_controller.dart`. Add `--force` to
+overwrite an existing file.
 
 ---
 
@@ -427,11 +453,12 @@ You can also read the recorded data programmatically via `app.devTools` (e.g.
 `app.devTools?.snapshot()`), or fetch the JSON snapshot at `/__dev/api`.
 
 > **Development only.** The dashboard exposes request headers and bodies, so it
-> never mounts when a production environment is detected: set
-> `DART_SERVER_ENV=production` (or `DART_ENV` / `ENV`) in production — or pass
-> `enabled: false`. When that variable is unset the environment is treated as
-> development (the Node `NODE_ENV` convention), so it works out of the box under
-> `dart run`. Force it with `app.useDevTools(enabled: true)`.
+> never mounts when `DART_SERVER_ENV` / `DART_ENV` / `ENV` holds a
+> production-like value — `production`, `prod`, `staging`, or `release`
+> (case-insensitive). Set one of those in production — or pass `enabled: false`.
+> When the variable is unset the environment is treated as development (the Node
+> `NODE_ENV` convention), so it works out of the box under `dart run`. Force it
+> with `app.useDevTools(enabled: true)`.
 
 ---
 
@@ -459,7 +486,8 @@ lib/
 example/
  └── main.dart               # runnable demo API
 test/
- └── dart_server_test.dart   # integration tests
+ ├── dart_server_test.dart   # core HTTP / routing integration tests
+ └── modular_test.dart       # modular layer: DI, encapsulation, controller routing
 ```
 
 ---
