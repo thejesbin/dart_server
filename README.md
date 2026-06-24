@@ -58,18 +58,15 @@ void main() async {
 
 ## Installation
 
-Add it to your `pubspec.yaml`:
+```sh
+dart pub add dart_server
+```
+
+Or add it to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  dart_server:
-    path: ../dart_server   # or a git/hosted ref once published
-```
-
-Then:
-
-```sh
-dart pub get
+  dart_server: ^1.0.0
 ```
 
 Requires Dart SDK `^3.0.0`.
