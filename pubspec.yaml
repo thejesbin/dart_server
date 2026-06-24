@@ -1,6 +1,6 @@
 name: dart_server
 description: A lightweight, Express.js-like HTTP server framework for Dart. Build REST APIs with routing, middleware, and JSON handling using zero external dependencies.
-version: 1.0.0
+version: 1.0.1
 
 repository: https://github.com/thejesbin/dart_server
 issue_tracker: https://github.com/thejesbin/dart_server/issues

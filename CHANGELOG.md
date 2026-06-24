@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- Render the dev-dashboard URL as code instead of an `http://` link so the
+  README passes pub.dev's secure-links check.
+- Point `repository` / `issue_tracker` at the canonical GitHub repository.
+
 ## 1.0.0
 
 Initial release.

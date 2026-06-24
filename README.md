@@ -434,7 +434,7 @@ app.useDevTools();              // mounts the dashboard at /__dev
 await app.listen(3000);
 ```
 
-Open **<http://localhost:3000/__dev>** — it auto-refreshes, lets you click any
+Open **`http://localhost:3000/__dev`** — it auto-refreshes, lets you click any
 request to inspect it, and has a Clear button. It's served entirely in-process
 with no external assets.
 
