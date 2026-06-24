@@ -32,17 +32,17 @@ void main() async {
 
 ## Features
 
-- 🚏 **Express-style routing** — `get` / `post` / `put` / `delete` / `patch` / `head` / `options` / `all`
-- 🔖 **Path params & wildcards** — `/users/:id`, `/files/*`
-- 🧅 **Middleware** — composable `(req, next)` chain with per-request `context`
-- 📦 **JSON in/out** — `await req.json()` and `Response.json(...)` with correct headers
-- 🔍 **Query parsing** — `req.query['q']`
-- 💥 **Global error handling** — throw `HttpError.notFound('...')`, get JSON back
-- 🎁 **Bundled middleware** — `logger()`, `cors()`, `serveStatic()`
-- 🧩 **Modular architecture** — NestJS-style modules, controllers & dependency injection (optional)
-- 🛠️ **Dev dashboard** — built-in request tracker at `/__dev` (dev only)
-- ⚡ **CLI** — scaffold projects, run dev/prod, generate modules/controllers/services
-- 🪶 **No dependencies** — built on `dart:io` + `dart:convert`, null-safe
+- **Express-style routing** — `get` / `post` / `put` / `delete` / `patch` / `head` / `options` / `all`
+- **Path params & wildcards** — `/users/:id`, `/files/*`
+- **Middleware** — composable `(req, next)` chain with per-request `context`
+- **JSON in/out** — `await req.json()` and `Response.json(...)` with correct headers
+- **Query parsing** — `req.query['q']`
+- **Global error handling** — throw `HttpError.notFound('...')`, get JSON back
+- **Bundled middleware** — `logger()`, `cors()`, `serveStatic()`
+- **Modular architecture** — NestJS-style modules, controllers & dependency injection (optional)
+- **Dev dashboard** — built-in request tracker at `/__dev` (dev only)
+- **CLI** — scaffold projects, run dev/prod, generate modules/controllers/services
+- **No dependencies** — built on `dart:io` + `dart:convert`, null-safe
 
 ## Contents
 
@@ -461,38 +461,46 @@ You can also read the recorded data programmatically via `app.devTools` (e.g.
 
 ## Project structure
 
+This is how an app you build with dart_server is laid out — exactly what
+`dart_server create` plus the `make:*` generators produce (and what the
+runnable [`example/`](example) in this repo mirrors):
+
 ```text
-bin/
- └── dart_server.dart        # the `dart_server` CLI executable
-lib/
- ├── dart_server.dart        # public API (barrel file)
- └── src/
-     ├── server.dart         # DartServer: binding, dispatch, error handling
-     ├── router.dart         # route table + param/wildcard matching
-     ├── request.dart        # Request wrapper + json() helper
-     ├── response.dart       # Response factories + socket writing
-     ├── middleware.dart     # typedefs + logger/cors/serveStatic
-     ├── dev_tools.dart      # in-memory request tracker + dashboard
-     ├── errors.dart         # HttpError
-     ├── module.dart         # Module, Provider, Injector, OnInit (DI model)
-     ├── di_container.dart   # module graph + encapsulated DI resolution
-     ├── controller.dart     # Controller base + RouteRegistrar
-     ├── factory.dart        # DartServerFactory (modular bootstrap)
-     ├── utils.dart          # path & MIME helpers
-     └── cli/                # CLI: scaffolding, generators, dev/prod runner
-example/
- └── main.dart               # runnable demo API
-test/
- ├── dart_server_test.dart   # core HTTP / routing integration tests
- └── modular_test.dart       # modular layer: DI, encapsulation, controller routing
+your_app/
+├── bin/
+│   └── server.dart                 # entry point — bootstraps appModule()
+├── lib/
+│   ├── app_module.dart             # root module — imports feature modules
+│   ├── app_controller.dart         # root controller (serves / and /health)
+│   ├── modules/                    # one self-contained folder per feature
+│   │   └── users/                  # e.g. `dart_server make:resource Users`
+│   │       ├── users.dart              # model
+│   │       ├── users_repository.dart   # data access
+│   │       ├── users_service.dart      # business logic (provider)
+│   │       ├── users_controller.dart   # routes under /users
+│   │       └── users_module.dart       # wires the feature together
+│   └── middleware/                 # cross-cutting middleware (make:middleware)
+├── pubspec.yaml
+└── analysis_options.yaml
 ```
+
+Each feature is fully encapsulated in its own `lib/modules/<feature>/` folder
+(model, repository, service, controller, module), then imported into
+`app_module.dart`.
 
 ---
 
 ## Running the example & tests
 
+The package ships a runnable example built in this exact layout:
+
 ```sh
-dart run example/main.dart   # starts the demo on :3000
+dart run example/main.dart   # starts the demo on :3000 (try /, /users, /users/1)
+```
+
+To work on dart_server itself:
+
+```sh
 dart test                    # run the test suite
 dart analyze                 # static analysis
 ```
