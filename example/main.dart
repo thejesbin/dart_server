@@ -1,9 +1,28 @@
 import 'package:dart_server/dart_server.dart';
 
-/// A small but complete API showing off routing, route params, JSON parsing,
-/// middleware, error handling and the bundled CORS / logging middleware.
+import 'app_module.dart';
+
+/// Entry point for the example app.
 ///
-/// Run it with:
+/// This is a complete, runnable tour of the modular (NestJS-style)
+/// architecture: a provider/service injected into a controller, grouped into a
+/// feature module, imported by a root module, and bootstrapped by
+/// [DartServerFactory].
+///
+/// The folder layout mirrors what `dart_server create` + `make:resource`
+/// generate:
+///
+///   example/
+///   ├── main.dart                     this file
+///   ├── app_module.dart               root module
+///   ├── app_controller.dart           root controller (/ and /health)
+///   └── modules/
+///       └── users/
+///           ├── users_module.dart     wires the feature
+///           ├── users_controller.dart routes under /users
+///           └── users_service.dart    provider (data + logic)
+///
+/// Run it:
 ///
 /// ```sh
 /// dart run example/main.dart
@@ -13,94 +32,28 @@ import 'package:dart_server/dart_server.dart';
 ///
 /// ```sh
 /// curl localhost:3000/
-/// curl localhost:3000/users/42
-/// curl localhost:3000/search?q=dart
-/// curl -X POST localhost:3000/login -d '{"email":"a@b.com"}' \
+/// curl localhost:3000/users
+/// curl localhost:3000/users/1
+/// curl localhost:3000/users/999            # -> 404
+/// curl -X POST localhost:3000/users -d '{"name":"Grace Hopper"}' \
 ///   -H 'Content-Type: application/json'
-/// curl -X POST localhost:3000/users -d '{"name":"Ada"}' \
-///   -H 'Content-Type: application/json'
-/// curl localhost:3000/boom
 /// ```
+///
+/// The dev dashboard is at http://localhost:3000/__dev
 void main() async {
-  final app = DartServer();
+  // DartServerFactory walks the module graph starting from appModule() and:
+  //   1. resolves the dependency graph and instantiates every provider,
+  //   2. runs OnInit hooks (here, UsersService seeds its data),
+  //   3. builds the controllers and mounts their routes.
+  // It returns a ready-to-serve DartServer.
+  final app = await DartServerFactory.create(appModule());
 
-  // --- Dev tools -------------------------------------------------------------
+  // The factory returns an ordinary DartServer, so the manual API still works —
+  // attach middleware, the dev dashboard, or extra routes just like normal.
+  app.useDevTools(); // development-only dashboard at /__dev
+  app.use(logger()); // logs each request, e.g. "GET /users 200 1ms"
+  app.use(cors()); // permissive CORS, fine for local development
 
-  // Mounts a request-tracking dashboard at http://localhost:3000/__dev
-  // Active only in development (no-op in a compiled production build).
-  app.useDevTools();
-
-  // --- Global middleware -----------------------------------------------------
-
-  // Log every request: "GET /users/42 200 1ms".
-  app.use(logger());
-
-  // Allow cross-origin requests (wide open — tighten `origin` in production).
-  app.use(cors());
-
-  // A custom inline middleware that stamps a request id onto the context.
-  app.use((req, next) async {
-    req.context['requestId'] = '${req.method}:${req.path}';
-    return await next();
-  });
-
-  // --- Routes ----------------------------------------------------------------
-
-  app.get('/', (req) => Response.text('Hello World'));
-
-  // Route parameters are available via `req.params`.
-  app.get('/users/:id', (req) {
-    return Response.json({'id': req.params['id']});
-  });
-
-  // Query parameters are parsed into `req.query`.
-  app.get('/search', (req) {
-    return Response.json({'query': req.query['q'], 'results': []});
-  });
-
-  // Parse a JSON body with `req.json()`.
-  app.post('/login', (req) async {
-    final body = await req.json() as Map<String, dynamic>?;
-    final email = body?['email'];
-    if (email == null) {
-      throw HttpError.badRequest('email is required');
-    }
-    return Response.json({'token': 'abc', 'email': email});
-  });
-
-  app.post('/users', (req) async {
-    final body = await req.json() as Map<String, dynamic>?;
-    return Response.status(201, {'id': 1, 'name': body?['name']});
-  });
-
-  app.put('/users/:id', (req) async {
-    final body = await req.json();
-    return Response.json({'id': req.params['id'], 'updated': body});
-  });
-
-  app.delete('/users/:id', (req) {
-    return Response.status(204);
-  });
-
-  // Throwing inside a handler is caught and turned into a JSON error response.
-  app.get('/boom', (req) {
-    throw StateError('something went wrong');
-  });
-
-  // --- Error handling --------------------------------------------------------
-
-  // Optional: customize how uncaught errors become responses.
-  app.onError((req, error, stackTrace) {
-    if (error is HttpError) {
-      return Response.json(error.toJson(), status: error.statusCode);
-    }
-    return Response.json(
-      {'error': 'Unexpected error', 'path': req.path},
-      status: 500,
-    );
-  });
-
+  // Start accepting connections on port 3000.
   await app.listen(3000);
-  // ignore: avoid_print
-  print('Dev dashboard: http://localhost:3000/__dev');
 }

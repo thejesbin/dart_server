@@ -64,7 +64,7 @@ dart_server dev      # development: auto-restart + dashboard at /__dev
 dart_server prod     # production
 ```
 
-The dev dashboard is available at <http://localhost:3000/__dev>.
+The dev dashboard is available at `http://localhost:3000/__dev`.
 
 ## Generate a feature
 
