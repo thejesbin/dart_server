@@ -4,6 +4,7 @@ import 'dart:io';
 ///
 /// Colors are auto-disabled when stdout isn't a TTY or `NO_COLOR` is set.
 class Console {
+  /// Creates a console; [color] overrides auto-detection of ANSI support.
   Console({bool? color}) : _color = color ?? _supportsColor();
 
   final bool _color;

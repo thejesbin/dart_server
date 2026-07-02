@@ -5,7 +5,8 @@ import 'console.dart';
 import 'templates.dart' as templates;
 
 /// CLI version, surfaced by `dart_server --version`.
-const String cliVersion = '1.0.0';
+// Keep in sync with pubspec.yaml's `version:` when releasing.
+const String cliVersion = '1.1.0';
 
 /// Entry point for the `dart_server` command-line tool. Returns a process
 /// exit code.
@@ -79,17 +80,21 @@ Future<int> _create(Console console, _Args args) async {
   final local = args.option('local');
   final dependency = local != null
       ? '  dart_server:\n    path: ${Directory(local).absolute.path}'
-      : '  dart_server: ^1.0.0';
+      : '  dart_server: ^$cliVersion';
 
   final files = <String, String>{
     'pubspec.yaml': templates.projectPubspec(pkg, dependency),
     '.gitignore': templates.projectGitignore(),
     'analysis_options.yaml': templates.projectAnalysisOptions(),
     'README.md': templates.projectReadme(pkg),
+    '.env.example': templates.envExampleFile(pkg),
     'bin/server.dart': templates.serverEntry(pkg),
     'lib/app_module.dart': templates.appModuleFile(pkg),
     'lib/app_controller.dart': templates.appControllerFile(pkg),
+    'lib/app_service.dart': templates.appServiceFile(pkg),
     'lib/modules/.gitkeep': '',
+    'test/app_test.dart': templates.testAppFile(pkg),
+    'test/app_service_test.dart': templates.testAppServiceFile(pkg),
   };
 
   files.forEach((relative, content) {
@@ -150,12 +155,18 @@ Future<int> _make(Console console, String type, _Args args) async {
       return _emitService(console, root, args, rawName);
     case 'module':
       return _emitModule(console, root, args, rawName);
+    case 'guard':
+      return _emitGuard(console, root, args, rawName);
+    case 'interceptor':
+      return _emitInterceptor(console, root, args, rawName);
+    case 'filter':
+      return _emitFilter(console, root, args, rawName);
     case 'resource':
       return _emitResource(console, root, args, rawName);
     default:
       console.error('Unknown generator: make:$type');
       console.info('Available: model, controller, repository, service, '
-          'module, middleware, resource');
+          'module, guard, interceptor, filter, middleware, resource');
       return 64;
   }
 }
@@ -193,6 +204,28 @@ int _emitMiddleware(Console console, String root, _Args args, String name) {
       relative: 'lib/middleware/${toSnakeCase(base)}_middleware.dart',
       content:
           templates.middlewareFile(toPascalCase(base), toCamelCase(base)));
+}
+
+int _emitGuard(Console console, String root, _Args args, String name) {
+  final base = _stripSuffix(name, const ['guard']);
+  return _write(console, root, args,
+      relative: 'lib/guards/${toSnakeCase(base)}_guard.dart',
+      content: templates.guardFile(toPascalCase(base)));
+}
+
+int _emitInterceptor(Console console, String root, _Args args, String name) {
+  final base = _stripSuffix(name, const ['interceptor']);
+  return _write(console, root, args,
+      relative: 'lib/interceptors/${toSnakeCase(base)}_interceptor.dart',
+      content:
+          templates.interceptorFile(toPascalCase(base), toCamelCase(base)));
+}
+
+int _emitFilter(Console console, String root, _Args args, String name) {
+  final base = _stripSuffix(name, const ['filter']);
+  return _write(console, root, args,
+      relative: 'lib/filters/${toSnakeCase(base)}_filter.dart',
+      content: templates.filterFile(toPascalCase(base)));
 }
 
 int _emitService(Console console, String root, _Args args, String name) {
@@ -244,9 +277,9 @@ void _registerHint(Console console, String base) {
   final camel = toCamelCase(base);
   console.info('');
   console.step('Register it in lib/app_module.dart:');
-  console.info("  import 'modules/$snake/${snake}_module.dart';");
-  console.info('  Module appModule() => Module(imports: [${camel}Module()], '
-      'controllers: [(i) => AppController()]);');
+  console.info("  1. add:  import 'modules/$snake/${snake}_module.dart';");
+  console.info('  2. add ${camel}Module() to the imports: [...] list of '
+      'appModule()');
 }
 
 int _write(
@@ -451,6 +484,9 @@ ${b('Generators')}  ${console.dim('(feature files go in lib/modules/<name>/)')}
   make:service <Name>      Create a service
   make:repository <Name>   Create a repository
   make:model <Name>        Create a model
+  make:guard <Name>        Create a guard        (lib/guards)
+  make:interceptor <Name>  Create an interceptor (lib/interceptors)
+  make:filter <Name>       Create an exception filter (lib/filters)
   make:middleware <Name>   Create a middleware   (lib/middleware)
   ${console.dim('(add --force to overwrite an existing file)')}
 

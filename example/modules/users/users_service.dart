@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:dart_server/dart_server.dart';
 
 /// A provider — an injectable class that holds logic and/or state.
@@ -6,10 +8,13 @@ import 'package:dart_server/dart_server.dart';
 /// instance and injects that same instance everywhere it's requested (here,
 /// into the users controller).
 ///
-/// Implementing [OnInit] is optional: dart_server awaits [onInit] once during
-/// bootstrap, after the dependency graph is wired — a good place to seed data
-/// or open a database connection.
-class UsersService implements OnInit {
+/// Lifecycle hooks are optional interfaces:
+/// * [OnInit] — `onInit()` is awaited once during bootstrap, after the
+///   dependency graph is wired. Seed data or open connections here.
+/// * [OnShutdown] — `onShutdown()` is awaited when the app closes (via
+///   `app.close()` or, with `app.enableShutdownHooks()`, on Ctrl-C/SIGTERM).
+///   Drain pools and flush buffers here.
+class UsersService implements OnInit, OnShutdown {
   // In-memory store standing in for a database; `_nextId` mimics auto-increment.
   final List<Map<String, dynamic>> _users = [];
   int _nextId = 1;
@@ -19,6 +24,13 @@ class UsersService implements OnInit {
   Future<void> onInit() async {
     create('Ada Lovelace');
     create('Alan Turing');
+  }
+
+  /// Runs once at shutdown (see [OnShutdown]); a real app would close its
+  /// database connection here.
+  @override
+  Future<void> onShutdown() async {
+    stdout.writeln('[users] store closed (${_users.length} users at exit)');
   }
 
   /// All users, as an unmodifiable view so callers can't mutate the store.

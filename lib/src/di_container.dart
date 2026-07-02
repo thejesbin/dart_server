@@ -6,6 +6,7 @@ import 'module.dart';
 ///
 /// Internal to the framework — used by `DartServerFactory`.
 class ModuleContainer {
+  /// Builds and validates the module graph reachable from [root].
   ModuleContainer(Module root) {
     _collect(root);
     _computeGlobals();
@@ -32,8 +33,17 @@ class ModuleContainer {
   final Set<_ModuleNode> _exportInProgress = {};
 
   // Instances in creation order, for lifecycle hooks (deduped by identity).
+  // Tracking stops once bootstrap completes so request-time transient
+  // resolutions can't grow this list unboundedly.
   final List<Object> _created = [];
   final Set<Object> _seen = Set.identity();
+  bool _bootstrapped = false;
+  List<Object> _lifecycle = const [];
+
+  /// The instances created during bootstrap, in creation (dependency) order —
+  /// dependencies before their dependents. Used for `OnInit`/`OnShutdown`
+  /// hooks; empty until [bootstrap] has completed.
+  List<Object> get lifecycleInstances => _lifecycle;
 
   _ModuleNode _collect(Module module) {
     final existing = _nodes[module];
@@ -156,6 +166,7 @@ class ModuleContainer {
       _injectors[node] ??= _ScopedInjector(this, node);
 
   void _markCreated(Object instance) {
+    if (_bootstrapped) return;
     if (_seen.add(instance)) _created.add(instance);
   }
 
@@ -181,9 +192,18 @@ class ModuleContainer {
       }
     }
 
-    for (final instance in _created) {
+    // Index-based: an onInit that resolves a not-yet-created provider (via a
+    // captured Injector) appends to _created mid-loop; those late arrivals
+    // must get their own onInit too, not crash the iteration.
+    for (var i = 0; i < _created.length; i++) {
+      final instance = _created[i];
       if (instance is OnInit) await instance.onInit();
     }
+
+    // Freeze the lifecycle list: instances created after bootstrap (e.g.
+    // request-time transients) are not tracked and get no lifecycle hooks.
+    _lifecycle = List.unmodifiable(_created);
+    _bootstrapped = true;
 
     return controllers;
   }
