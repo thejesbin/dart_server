@@ -72,7 +72,8 @@ Middleware logger({
     } finally {
       stopwatch.stop();
     }
-    final prefix = includeTimestamp ? '${DateTime.now().toIso8601String()} ' : '';
+    final prefix =
+        includeTimestamp ? '${DateTime.now().toIso8601String()} ' : '';
     write('$prefix${req.method} ${req.path} '
         '${res.statusCode} ${stopwatch.elapsedMilliseconds}ms');
     return res;
@@ -107,7 +108,14 @@ Middleware logger({
 Middleware cors({
   String origin = '*',
   List<String>? origins,
-  List<String> methods = const ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  List<String> methods = const [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS'
+  ],
   List<String> allowedHeaders = const ['Content-Type', 'Authorization'],
   List<String> exposedHeaders = const [],
   bool credentials = false,

@@ -13,7 +13,8 @@ class ApiKeyGuard implements Guard {
 
 class ThrowingGuard implements Guard {
   @override
-  bool canActivate(Request req) => throw HttpError.unauthorized('token expired');
+  bool canActivate(Request req) =>
+      throw HttpError.unauthorized('token expired');
 }
 
 class ProbeController extends Controller {
@@ -213,8 +214,8 @@ void main() {
       ]);
       final server = await start(await DartServerFactory.create(module));
 
-      final uri = Uri.parse(
-          'http://${server.address.host}:${server.port}/probe');
+      final uri =
+          Uri.parse('http://${server.address.host}:${server.port}/probe');
       final response = await (await client!.getUrl(uri)).close();
       expect(response.headers.value('x-intercepted'), 'yes');
     });
@@ -490,8 +491,7 @@ PLAIN=foo # kept verbatim for unquoted values
 
       expect(jsonDecode((await get(server, '/search')).body),
           {'page': null, 'exact': null});
-      expect(
-          jsonDecode((await get(server, '/search?page=2&exact=yes')).body),
+      expect(jsonDecode((await get(server, '/search?page=2&exact=yes')).body),
           {'page': 2, 'exact': true});
       expect((await get(server, '/search?page=two')).status, 400);
       expect((await get(server, '/search?exact=perhaps')).status, 400);
@@ -503,8 +503,7 @@ PLAIN=foo # kept verbatim for unquoted values
       final server = await start(appServer);
 
       Future<int> post(String body) async {
-        final uri =
-            Uri.parse('http://${server.address.host}:${server.port}/x');
+        final uri = Uri.parse('http://${server.address.host}:${server.port}/x');
         final request = await client!.postUrl(uri);
         request.headers.contentType = ContentType('application', 'json');
         request.write(body);

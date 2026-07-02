@@ -22,7 +22,7 @@
 ///   await app.listen(3000);
 /// }
 /// ```
-library dart_server;
+library;
 
 export 'src/controller.dart' show Controller, RouteRegistrar, RouteEntry;
 export 'src/dev_tools.dart' show DevTools, RequestRecord;
@@ -31,9 +31,18 @@ export 'src/errors.dart';
 export 'src/exception_filter.dart' show ExceptionFilter;
 export 'src/factory.dart' show DartServerFactory;
 export 'src/guard.dart' show Guard;
-export 'src/middleware.dart' show Handler, Next, Middleware, ErrorHandler, logger, cors, serveStatic;
+export 'src/middleware.dart'
+    show Handler, Next, Middleware, ErrorHandler, logger, cors, serveStatic;
 export 'src/module.dart'
-    show Module, Provider, ProviderScope, ControllerFactory, Injector, DiError, OnInit, OnShutdown;
+    show
+        Module,
+        Provider,
+        ProviderScope,
+        ControllerFactory,
+        Injector,
+        DiError,
+        OnInit,
+        OnShutdown;
 export 'src/request.dart';
 export 'src/response.dart';
 export 'src/server.dart';

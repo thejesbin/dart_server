@@ -33,7 +33,8 @@ class Console {
   void step(String message) => stdout.writeln(_wrap('36', message));
 
   /// A green success line.
-  void success(String message) => stdout.writeln('${_wrap('32', '✓')} $message');
+  void success(String message) =>
+      stdout.writeln('${_wrap('32', '✓')} $message');
 
   /// A yellow warning line.
   void warn(String message) => stdout.writeln('${_wrap('33', '!')} $message');
@@ -41,11 +42,11 @@ class Console {
   /// A red error line (to stderr).
   void error(String message) => stderr.writeln('${_wrap('31', '✗')} $message');
 
-  /// "created  <path>" — a generated file.
+  /// Prints a `created <path>` line for a freshly generated file.
   void created(String path) =>
       stdout.writeln('  ${_wrap('32', 'created')}  $path');
 
-  /// "skipped  <path>" — an existing file left untouched.
+  /// Prints a `skipped <path>` line for an existing file left untouched.
   void skipped(String path) =>
       stdout.writeln('  ${_wrap('33', 'skipped')}  $path');
 }

@@ -26,15 +26,18 @@ class HttpError implements Exception {
   HttpError(this.statusCode, this.message, {this.details});
 
   /// `400 Bad Request`.
-  factory HttpError.badRequest([String message = 'Bad Request', Object? details]) =>
+  factory HttpError.badRequest(
+          [String message = 'Bad Request', Object? details]) =>
       HttpError(400, message, details: details);
 
   /// `401 Unauthorized`.
-  factory HttpError.unauthorized([String message = 'Unauthorized', Object? details]) =>
+  factory HttpError.unauthorized(
+          [String message = 'Unauthorized', Object? details]) =>
       HttpError(401, message, details: details);
 
   /// `403 Forbidden`.
-  factory HttpError.forbidden([String message = 'Forbidden', Object? details]) =>
+  factory HttpError.forbidden(
+          [String message = 'Forbidden', Object? details]) =>
       HttpError(403, message, details: details);
 
   /// `404 Not Found`.

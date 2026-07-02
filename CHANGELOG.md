@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0
+## 1.0.2
 
 NestJS-parity release: the full request pipeline, lifecycle and configuration —
 still zero dependencies, no reflection, no code generation.
