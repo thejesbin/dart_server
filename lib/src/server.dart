@@ -41,6 +41,14 @@ class DartServer {
 
   final Router _router = Router();
   final List<Middleware> _middlewares = [];
+  final List<Future<void> Function()> _shutdownHooks = [];
+  final List<StreamSubscription<ProcessSignal>> _signalSubscriptions = [];
+  // Memoized teardown future: all close() callers share one teardown run.
+  Future<void>? _closing;
+  // Requests currently inside _handleRequest, and the completer a graceful
+  // close awaits until they drain.
+  int _inFlight = 0;
+  Completer<void>? _idle;
   ErrorHandler? _errorHandler;
   HttpServer? _httpServer;
   DevTools? _devTools;
@@ -193,32 +201,127 @@ class DartServer {
     return httpServer;
   }
 
-  /// Stops the server from accepting new connections.
+  /// Registers a [hook] to run when the server [close]s.
   ///
-  /// When [force] is `true`, active connections are closed immediately;
-  /// otherwise the server waits for them to finish.
-  Future<void> close({bool force = false}) async {
-    await _httpServer?.close(force: force);
+  /// Hooks run once, in reverse registration order (last registered, first
+  /// run). A hook that throws is logged to stderr and does not prevent the
+  /// remaining hooks from running. `DartServerFactory` uses this to run
+  /// `OnShutdown` lifecycle hooks on providers and controllers.
+  void addShutdownHook(Future<void> Function() hook) =>
+      _shutdownHooks.add(hook);
+
+  /// Runs shutdown hooks on SIGINT/SIGTERM (Ctrl-C, container stop), so the
+  /// process can release resources cleanly instead of dying mid-request.
+  ///
+  /// The first signal triggers a graceful [close]: the server stops accepting
+  /// connections, waits for in-flight requests to finish, then runs all
+  /// shutdown hooks (including `OnShutdown` providers). A **second** signal
+  /// escalates: active connections are destroyed, the wait is abandoned, and
+  /// signal interception is removed — so a third signal terminates the process
+  /// with Dart's default behavior. Without calling this, hooks only run when
+  /// you call [close] yourself.
+  ///
+  /// Calling it more than once has no effect. SIGTERM is not watchable on
+  /// Windows and is skipped there.
+  void enableShutdownHooks() {
+    if (_signalSubscriptions.isNotEmpty) return;
+    final signals = [
+      ProcessSignal.sigint,
+      if (!Platform.isWindows) ProcessSignal.sigterm,
+    ];
+    for (final signal in signals) {
+      _signalSubscriptions.add(signal.watch().listen((_) {
+        if (_closing == null) {
+          // First signal: graceful shutdown. Never let an error escape as an
+          // uncaught async error from the signal callback.
+          close().catchError((Object error, StackTrace stackTrace) {
+            stderr.writeln('Shutdown failed: $error\n$stackTrace');
+          });
+        } else {
+          // Second signal: force. Destroy connections, unblock the drain,
+          // and stop intercepting signals (a third signal then terminates).
+          final subscriptions = List.of(_signalSubscriptions);
+          _signalSubscriptions.clear();
+          for (final subscription in subscriptions) {
+            subscription.cancel();
+          }
+          _httpServer?.close(force: true);
+          _idle?.complete();
+          _idle = null;
+        }
+      }));
+    }
+  }
+
+  /// Stops the server from accepting new connections, waits for in-flight
+  /// requests to finish (unless [force] is `true`, which destroys their
+  /// connections immediately), then runs shutdown hooks (see
+  /// [addShutdownHook]) exactly once.
+  ///
+  /// Safe to call multiple times and from concurrent callers — every call
+  /// shares the same teardown future. Note that [force] only takes effect on
+  /// the first call.
+  Future<void> close({bool force = false}) => _closing ??= _doClose(force);
+
+  Future<void> _doClose(bool force) async {
+    // Stop intercepting signals early; snapshot first so a concurrent
+    // escalation handler can't race the iteration.
+    final subscriptions = List.of(_signalSubscriptions);
+    _signalSubscriptions.clear();
+    for (final subscription in subscriptions) {
+      await subscription.cancel();
+    }
+
+    // Stop accepting new connections. HttpServer.close(force: false) does NOT
+    // wait for in-flight requests — that's what the drain below is for.
+    final server = _httpServer;
+    if (server != null) await server.close(force: force);
+
+    // Drain: wait until every request currently in _handleRequest completes.
+    if (!force && _inFlight > 0) {
+      final completer = Completer<void>();
+      _idle = completer;
+      if (_inFlight > 0) await completer.future;
+      _idle = null;
+    }
     _httpServer = null;
+
+    for (final hook in _shutdownHooks.reversed) {
+      try {
+        await hook();
+      } catch (error, stackTrace) {
+        stderr.writeln('Shutdown hook failed: $error\n$stackTrace');
+      }
+    }
   }
 
   /// Reads the request, runs it through the chain and writes the response.
   Future<void> _handleRequest(HttpRequest httpRequest) async {
-    Request? req;
+    _inFlight++;
     try {
-      req = await Request.from(httpRequest,
-          maxBodyBytes: maxBodyBytes > 0 ? maxBodyBytes : null);
-      final response = await _runChain(req);
-      await response.writeTo(httpRequest.response, head: req.method == 'HEAD');
-    } catch (error, stackTrace) {
-      // Reached only for errors thrown outside the route handler (e.g. body
-      // buffering / 413, or a middleware that throws before/after next()).
-      final response = await _resolveError(req, error, stackTrace);
+      Request? req;
       try {
+        req = await Request.from(httpRequest,
+            maxBodyBytes: maxBodyBytes > 0 ? maxBodyBytes : null);
+        final response = await _runChain(req);
         await response.writeTo(httpRequest.response,
-            head: req?.method == 'HEAD');
-      } catch (_) {
-        // The response was already (partially) sent; nothing more we can do.
+            head: req.method == 'HEAD');
+      } catch (error, stackTrace) {
+        // Reached only for errors thrown outside the route handler (e.g. body
+        // buffering / 413, or a middleware that throws before/after next()).
+        final response = await _resolveError(req, error, stackTrace);
+        try {
+          await response.writeTo(httpRequest.response,
+              head: req?.method == 'HEAD');
+        } catch (_) {
+          // The response was already (partially) sent; nothing more we can do.
+        }
+      }
+    } finally {
+      _inFlight--;
+      if (_inFlight == 0) {
+        _idle?.complete();
+        _idle = null;
       }
     }
   }

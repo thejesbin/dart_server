@@ -21,6 +21,7 @@ class Route {
   /// The pattern split into segments, computed once at registration time.
   final List<String> segments;
 
+  /// Creates a route, validating that a wildcard only ends the pattern.
   Route(String method, this.pattern, this.handler)
       : method = method.toUpperCase(),
         segments = splitPath(pattern) {
@@ -42,6 +43,7 @@ class RouteMatch {
   /// Named path parameters, e.g. `{'id': '42'}` for `/users/:id`.
   final Map<String, String> params;
 
+  /// Creates a match result.
   RouteMatch(this.handler, this.params);
 }
 

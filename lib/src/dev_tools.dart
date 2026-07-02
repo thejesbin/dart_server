@@ -48,6 +48,8 @@ class RequestRecord {
   /// String form of an error thrown while handling the request, or `null`.
   String? error;
 
+  /// Creates a record for a request that just arrived; response fields are
+  /// filled in when the exchange completes.
   RequestRecord({
     required this.id,
     required this.time,
@@ -83,6 +85,8 @@ class RequestRecord {
 /// dashboard plus a JSON snapshot. Created and wired up by
 /// [DartServer.useDevTools]; you rarely construct this directly.
 class DevTools {
+  /// Creates a collector. [routesProvider]/[portProvider] let the dashboard
+  /// display the live route table and bound port.
   DevTools({
     required this.dashboardPath,
     this.maxRequests = 100,

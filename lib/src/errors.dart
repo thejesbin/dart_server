@@ -50,10 +50,20 @@ class HttpError implements Exception {
           [String message = 'Unprocessable Entity', Object? details]) =>
       HttpError(422, message, details: details);
 
+  /// `429 Too Many Requests` — e.g. thrown by a rate-limiting guard.
+  factory HttpError.tooManyRequests(
+          [String message = 'Too Many Requests', Object? details]) =>
+      HttpError(429, message, details: details);
+
   /// `500 Internal Server Error`.
   factory HttpError.internal(
           [String message = 'Internal Server Error', Object? details]) =>
       HttpError(500, message, details: details);
+
+  /// `503 Service Unavailable`.
+  factory HttpError.serviceUnavailable(
+          [String message = 'Service Unavailable', Object? details]) =>
+      HttpError(503, message, details: details);
 
   /// The JSON body this error serializes to.
   Map<String, dynamic> toJson() => {

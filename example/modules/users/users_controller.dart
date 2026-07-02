@@ -1,5 +1,6 @@
 import 'package:dart_server/dart_server.dart';
 
+import 'api_key_guard.dart';
 import 'users_service.dart';
 
 /// A controller — groups related routes and turns requests into responses.
@@ -20,11 +21,15 @@ class UsersController extends Controller {
   String get basePath => '/users';
 
   /// Declares the routes; paths here are relative to [basePath].
+  ///
+  /// Routes can attach guards, interceptors, middleware and exception filters
+  /// — here the write route is protected by [ApiKeyGuard] while reads stay
+  /// public.
   @override
   void register(RouteRegistrar routes) {
     routes.get('/', index);
     routes.get('/:id', show);
-    routes.post('/', store);
+    routes.post('/', store, guards: [ApiKeyGuard()]);
   }
 
   /// `GET /users` — list every user.
@@ -32,8 +37,8 @@ class UsersController extends Controller {
 
   /// `GET /users/:id` — fetch one user, or 404 if it doesn't exist.
   Response show(Request req) {
-    // `req.params` holds the matched path parameters, as strings.
-    final id = int.tryParse(req.params['id'] ?? '') ?? -1;
+    // paramInt is the ParseIntPipe equivalent: /users/abc -> 400, not a 500.
+    final id = req.paramInt('id');
     final user = _users.find(id);
     // A thrown HttpError is turned into a JSON error response automatically.
     if (user == null) throw HttpError.notFound('User $id not found');
@@ -41,10 +46,11 @@ class UsersController extends Controller {
   }
 
   /// `POST /users` — create a user from the JSON request body.
+  /// Guarded by [ApiKeyGuard]: requires the `x-api-key: dev-secret` header.
   Future<Response> store(Request req) async {
-    // `req.json()` parses the body; it's null for an empty body.
-    final body = await req.json() as Map<String, dynamic>?;
-    final name = body?['name'] as String?;
+    // jsonMap() validates the body is a JSON object (else 400 Bad Request).
+    final body = await req.jsonMap();
+    final name = body['name'] as String?;
     if (name == null || name.isEmpty) {
       throw HttpError.badRequest('name is required');
     }

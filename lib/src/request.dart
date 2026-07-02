@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'errors.dart';
 
@@ -111,15 +112,17 @@ class Request {
       throw HttpError(413, 'Payload Too Large',
           details: {'maxBytes': maxBodyBytes});
     }
-    final bytes = <int>[];
+    // BytesBuilder keeps the buffer as byte data (vs a growable List<int>,
+    // whose boxed elements would cost ~8x the body size on the 64-bit VM).
+    final builder = BytesBuilder(copy: false);
     await for (final chunk in raw) {
-      bytes.addAll(chunk);
-      if (maxBodyBytes != null && bytes.length > maxBodyBytes) {
+      builder.add(chunk);
+      if (maxBodyBytes != null && builder.length > maxBodyBytes) {
         throw HttpError(413, 'Payload Too Large',
             details: {'maxBytes': maxBodyBytes});
       }
     }
-    return bytes;
+    return builder.takeBytes();
   }
 
   /// The request body decoded as a UTF-8 string (cached).
@@ -150,6 +153,83 @@ class Request {
     _parsedJson = decoded;
     _jsonParsed = true;
     return decoded;
+  }
+
+  /// Parses the request body as JSON and requires it to be a JSON object.
+  ///
+  /// Unlike [json], validation failures become client errors instead of
+  /// `500`s: an invalid JSON body or a non-object body (array, string, …)
+  /// throws [HttpError] `400 Bad Request`.
+  ///
+  /// ```dart
+  /// final body = await req.jsonMap();
+  /// final name = body['name'] as String?;
+  /// ```
+  Future<Map<String, dynamic>> jsonMap() async {
+    final Object? decoded;
+    try {
+      decoded = await json();
+    } on FormatException catch (e) {
+      throw HttpError.badRequest('Invalid JSON body: ${e.message}');
+    }
+    if (decoded is! Map<String, dynamic>) {
+      throw HttpError.badRequest('Request body must be a JSON object');
+    }
+    return decoded;
+  }
+
+  /// The route parameter [name], throwing [HttpError] `400` if it's missing.
+  String param(String name) {
+    final value = params[name];
+    if (value == null) {
+      throw HttpError.badRequest('Missing route parameter "$name"');
+    }
+    return value;
+  }
+
+  /// The route parameter [name] parsed as an integer.
+  ///
+  /// Throws [HttpError] `400 Bad Request` when the parameter is missing or not
+  /// an integer, so malformed client input never surfaces as a server error:
+  ///
+  /// ```dart
+  /// final id = req.paramInt('id'); // /users/abc -> 400, not a 500
+  /// ```
+  int paramInt(String name) {
+    final value = param(name);
+    final parsed = int.tryParse(value);
+    if (parsed == null) {
+      throw HttpError.badRequest('Route parameter "$name" must be an integer');
+    }
+    return parsed;
+  }
+
+  /// The query parameter [name] parsed as an integer, or `null` if absent.
+  /// Throws [HttpError] `400` if it's present but not an integer.
+  int? queryInt(String name) {
+    final value = query[name];
+    if (value == null) return null;
+    final parsed = int.tryParse(value);
+    if (parsed == null) {
+      throw HttpError.badRequest('Query parameter "$name" must be an integer');
+    }
+    return parsed;
+  }
+
+  /// The query parameter [name] parsed as a boolean, or `null` if absent.
+  ///
+  /// Accepts `true`/`1`/`yes`/`on` and `false`/`0`/`no`/`off`
+  /// (case-insensitive); anything else throws [HttpError] `400`.
+  bool? queryBool(String name) {
+    final value = query[name];
+    if (value == null) return null;
+    switch (value.toLowerCase()) {
+      case 'true' || '1' || 'yes' || 'on':
+        return true;
+      case 'false' || '0' || 'no' || 'off':
+        return false;
+    }
+    throw HttpError.badRequest('Query parameter "$name" must be a boolean');
   }
 
   /// The value of the `Content-Type` header, or `null` if absent.

@@ -82,6 +82,7 @@ typedef ControllerFactory = Controller Function(Injector injector);
 /// );
 /// ```
 class Module {
+  /// Creates a module from its parts; all lists default to empty.
   Module({
     this.imports = const [],
     this.providers = const [],
@@ -111,6 +112,7 @@ class Module {
 /// A dependency-injection / module-wiring error, thrown during bootstrap for
 /// missing providers, circular dependencies and invalid exports.
 class DiError extends Error {
+  /// Creates an error with a human-readable [message].
   DiError(this.message);
 
   /// Human-readable description of what went wrong.
@@ -123,7 +125,30 @@ class DiError extends Error {
 /// Optional lifecycle hook: any provider or controller implementing this has
 /// [onInit] awaited once during bootstrap, after the whole graph is wired (in
 /// dependency order).
-abstract class OnInit {
+abstract interface class OnInit {
   /// Runs one-time async initialization (e.g. opening a DB connection).
   Future<void> onInit();
+}
+
+/// Optional lifecycle hook: any provider or controller implementing this has
+/// [onShutdown] awaited once when the application closes, in reverse creation
+/// order (dependents are torn down before their dependencies).
+///
+/// Hooks run when `app.close()` is called. To also run them on SIGINT/SIGTERM
+/// (Ctrl-C, container stop), call `app.enableShutdownHooks()` after creating
+/// the app. A hook that throws is logged to stderr and does not prevent the
+/// remaining hooks from running.
+///
+/// ```dart
+/// class Database implements OnInit, OnShutdown {
+///   @override
+///   Future<void> onInit() async => _pool = await connect();
+///
+///   @override
+///   Future<void> onShutdown() async => _pool.close();
+/// }
+/// ```
+abstract interface class OnShutdown {
+  /// Runs one-time async teardown (e.g. draining a DB pool).
+  Future<void> onShutdown();
 }

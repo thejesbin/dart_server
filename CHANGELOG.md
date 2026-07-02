@@ -1,5 +1,57 @@
 # Changelog
 
+## 1.1.0
+
+NestJS-parity release: the full request pipeline, lifecycle and configuration —
+still zero dependencies, no reflection, no code generation.
+
+### Request pipeline
+
+- **Guards** (`Guard`, the `CanActivate` equivalent): attach globally
+  (`DartServerFactory.create(root, guards: [...])`), per controller
+  (`List<Guard> get guards`) or per route
+  (`routes.get('/', h, guards: [...])`). `false` → `403`; throw an `HttpError`
+  for other statuses. `Guard.from((req) => ...)` for inline guards.
+- **Interceptors**: wrap handler execution *after* guards pass (Nest's
+  lifecycle order) — same `(req, next)` shape as middleware; attach globally,
+  per controller or per route.
+- **Scoped middleware**: controller- and route-level middleware, running
+  before guards (Express-style position, like Nest middleware).
+- **Exception filters** (`ExceptionFilter`): convert errors into responses,
+  tried most-specific-first (route → controller → global); return `null` to
+  decline. Unhandled errors fall through to `onError` / `HttpError` mapping.
+
+### Lifecycle & configuration
+
+- **`OnShutdown`** — awaited in reverse creation order when the app closes;
+  pairs with the existing `OnInit`.
+- **Graceful shutdown** — `app.close()` now drains in-flight requests before
+  running hooks, is safe under concurrent calls (one shared teardown future),
+  and a failing hook never blocks the rest.
+- **`app.enableShutdownHooks()`** — run shutdown hooks on SIGINT/SIGTERM
+  (Ctrl-C, container stop), Nest-style. A second signal force-closes
+  connections and stops intercepting, so a stuck shutdown can always be
+  escaped. `app.addShutdownHook()` registers your own hooks.
+- **`Env`** — zero-dep `.env` + `Platform.environment` configuration
+  (`Env.load()`, `env['KEY']`, `require`, `getInt`, `getBool`); the real
+  environment wins over file values.
+
+### Ergonomics
+
+- Typed request helpers (the ParseIntPipe equivalents): `req.paramInt()`,
+  `req.param()`, `req.queryInt()`, `req.queryBool()`, and `req.jsonMap()` —
+  validation failures become `400`s instead of `500`s.
+- `HttpError.tooManyRequests` (429) and `HttpError.serviceUnavailable` (503).
+- `OnInit`/`OnShutdown`/`Guard`/`ExceptionFilter` are `interface` classes —
+  implement, don't extend.
+
+### CLI
+
+- `create` now scaffolds the full Nest-style starter: `app_module` +
+  `app_controller` + `app_service` (with DI), `.env.example`, a unit test and
+  an end-to-end test, and `enableShutdownHooks()` wired in `bin/server.dart`.
+- New generators: `make:guard`, `make:interceptor`, `make:filter`.
+
 ## 1.0.1
 
 - Render the dev-dashboard URL as code instead of an `http://` link so the
