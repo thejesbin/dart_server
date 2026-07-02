@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.0.3
+
+### API documentation (OpenAPI)
+
+- **`app.useOpenApi()`** — serves an interactive documentation UI at `/docs`
+  and the generated OpenAPI 3.0 specification at `/docs/openapi.json`, built
+  automatically from the route table (methods, paths, path parameters).
+- **`ApiDoc`** — optional `doc:` argument on every route registration
+  (controller and Express-style) for summaries, descriptions, tags,
+  parameter/body/response docs, security references, `deprecated` and
+  `hidden`.
+- **`ApiSchema`** — a minimal JSON-Schema builder (`object`/`string`/
+  `integer`/`number`/`boolean`/`array`/`raw`) for payload shapes, plus
+  `ApiParam`, `ApiBody` and `ApiResponse`.
+- `OpenApiGenerator` is exported for offline spec generation (e.g. CI).
+- **`ApiSecurityScheme`** (`apiKey`/`bearer`/`basic`/`raw`) — declare
+  authentication on `useOpenApi(securitySchemes: ...)` and reference it with
+  `ApiDoc(security: [...])`; the docs UI shows an Authorize button and sends
+  the credential with try-it-out requests.
+- The scaffold (`dart_server create`) wires `useOpenApi` and documents its
+  routes out of the box.
+
+### Logging & startup
+
+- The startup banner now prints the API docs and dev-dashboard URLs (linking
+  via `localhost` when bound to all interfaces).
+- `logger()` no longer logs the dev dashboard's own polling traffic (marked
+  with the new `internalRequestMarker` context key); opt back in with
+  `logInternal: true`. New `ignorePaths:` option silences other noisy
+  endpoints (e.g. `/health`) by path prefix.
+
 ## 1.0.2
 
 NestJS-parity release: the full request pipeline, lifecycle and configuration —

@@ -31,21 +31,22 @@ import 'app_module.dart';
 /// Then try:
 ///
 /// ```sh
-/// curl localhost:3000/
-/// curl localhost:3000/users
-/// curl localhost:3000/users/1
-/// curl localhost:3000/users/999            # -> 404 (not found)
-/// curl localhost:3000/users/abc            # -> 400 (paramInt rejects it)
+/// curl localhost:4000/
+/// curl localhost:4000/users
+/// curl localhost:4000/users/1
+/// curl localhost:4000/users/999            # -> 404 (not found)
+/// curl localhost:4000/users/abc            # -> 400 (paramInt rejects it)
 ///
 /// # POST is guarded: without the API key it's 401, with it 201.
-/// curl -X POST localhost:3000/users -d '{"name":"Grace Hopper"}' \
+/// curl -X POST localhost:4000/users -d '{"name":"Grace Hopper"}' \
 ///   -H 'Content-Type: application/json'
-/// curl -X POST localhost:3000/users -d '{"name":"Grace Hopper"}' \
+/// curl -X POST localhost:4000/users -d '{"name":"Grace Hopper"}' \
 ///   -H 'Content-Type: application/json' -H 'x-api-key: dev-secret'
 /// ```
 ///
-/// The dev dashboard is at http://localhost:3000/__dev — and Ctrl-C triggers
-/// the OnShutdown hooks (watch for the "[users] store closed" line).
+/// Interactive API docs are at http://localhost:4000/docs, the dev dashboard
+/// at http://localhost:4000/__dev — and Ctrl-C triggers the OnShutdown hooks
+/// (watch for the "[users] store closed" line).
 void main() async {
   // DartServerFactory walks the module graph starting from appModule() and:
   //   1. resolves the dependency graph and instantiates every provider,
@@ -57,12 +58,23 @@ void main() async {
   // The factory returns an ordinary DartServer, so the manual API still works —
   // attach middleware, the dev dashboard, or extra routes just like normal.
   app.useDevTools(); // development-only dashboard at /__dev
+  // Interactive docs at /docs. Declaring the security scheme gives Swagger UI
+  // an Authorize button: click it, enter dev-secret, and try-it-out requests
+  // will send the x-api-key header (see ApiKeyGuard).
+  app.useOpenApi(
+    title: 'Users API',
+    version: '1.0.0',
+    securitySchemes: {
+      'apiKey': ApiSecurityScheme.apiKey('x-api-key',
+          description: "Use 'dev-secret' for this demo."),
+    },
+  );
   app.use(logger()); // logs each request, e.g. "GET /users 200 1ms"
   app.use(cors()); // permissive CORS, fine for local development
 
   // Run OnShutdown hooks (UsersService.onShutdown) on Ctrl-C / SIGTERM.
   app.enableShutdownHooks();
 
-  // Start accepting connections on port 3000.
-  await app.listen(3000);
+  // Start accepting connections.
+  await app.listen(4000);
 }

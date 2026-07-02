@@ -71,7 +71,8 @@ dart_server dev      # development: auto-restart + dashboard at /__dev
 dart_server prod     # production
 ```
 
-The dev dashboard is available at `http://localhost:3000/__dev`.
+Interactive API docs are served at `http://localhost:3000/docs` and the dev
+dashboard at `http://localhost:3000/__dev`.
 
 ## Generate a feature
 
@@ -138,6 +139,10 @@ Future<void> main(List<String> args) async {
 
   // Development dashboard at /__dev — auto-disabled in production.
   app.useDevTools();
+
+  // Interactive OpenAPI docs at /docs (spec at /docs/openapi.json).
+  app.useOpenApi(title: '__PKG__ API', version: '0.1.0');
+
   app.use(logger());
   app.use(cors());
 
@@ -207,8 +212,13 @@ class AppController extends Controller {
 
   @override
   void register(RouteRegistrar routes) {
-    routes.get('/', (req) => Response.json({'message': _service.hello()}));
-    routes.get('/health', (req) => Response.json({'status': 'ok'}));
+    routes.get('/', (req) => Response.json({'message': _service.hello()}),
+        doc: ApiDoc(summary: 'Greeting'));
+    routes.get('/health', (req) => Response.json({'status': 'ok'}),
+        doc: ApiDoc(
+          summary: 'Health check',
+          responses: {200: ApiResponse('The service is up')},
+        ));
   }
 }
 ''', {'PKG': pkg});

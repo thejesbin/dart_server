@@ -130,9 +130,13 @@ class DevTools {
 
   /// Middleware that records each request. Mounted outermost so it observes the
   /// final response (after all other middleware). Its own dashboard traffic is
-  /// skipped to avoid noise.
+  /// skipped, and marked with [internalRequestMarker] so downstream middleware
+  /// (like `logger()`) can keep it out of the application logs.
   Middleware get middleware => (req, next) async {
-        if (_isDashboardPath(req.path)) return next();
+        if (_isDashboardPath(req.path)) {
+          req.context[internalRequestMarker] = true;
+          return next();
+        }
 
         final record = RequestRecord(
           id: _nextId++,

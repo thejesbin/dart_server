@@ -32,7 +32,15 @@ export 'src/exception_filter.dart' show ExceptionFilter;
 export 'src/factory.dart' show DartServerFactory;
 export 'src/guard.dart' show Guard;
 export 'src/middleware.dart'
-    show Handler, Next, Middleware, ErrorHandler, logger, cors, serveStatic;
+    show
+        Handler,
+        Next,
+        Middleware,
+        ErrorHandler,
+        internalRequestMarker,
+        logger,
+        cors,
+        serveStatic;
 export 'src/module.dart'
     show
         Module,
@@ -43,6 +51,16 @@ export 'src/module.dart'
         DiError,
         OnInit,
         OnShutdown;
+export 'src/openapi.dart'
+    show
+        ApiDoc,
+        ApiParam,
+        ApiBody,
+        ApiResponse,
+        ApiSchema,
+        ApiSecurityScheme,
+        DocumentedRoute,
+        OpenApiGenerator;
 export 'src/request.dart';
 export 'src/response.dart';
 export 'src/server.dart';

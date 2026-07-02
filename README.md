@@ -47,6 +47,7 @@ dart_server prod                 # production mode (dashboard off, no watch)
 - [Guards](#guards) · [Interceptors](#interceptors) · [Exception filters](#exception-filters)
 - [Lifecycle](#lifecycle) · [Configuration](#configuration-env)
 - [CLI reference](#cli-reference)
+- [API documentation](#api-documentation-openapi--swagger) — OpenAPI spec + interactive docs
 - [The Express-style core](#the-express-style-core)
 - [Bundled middleware](#bundled-middleware) · [Dev tools](#dev-tools)
 - [Using it as a library](#using-it-as-a-library)
@@ -395,6 +396,74 @@ app.use(serveStatic('public'));              // static files, traversal-safe
   use the `origins` allow-list for credentialed access.
 - `serveStatic` serves `index.html` for directories, falls through to routes
   on a miss, and rejects `..`/symlink path traversal with `403`.
+
+---
+
+## API documentation (OpenAPI / Swagger)
+
+Serve interactive, always-current API docs straight from the route table:
+
+```dart
+final app = await DartServerFactory.create(appModule());
+app.useOpenApi(title: 'Blog API', version: '1.0.0');
+// UI at /docs · specification at /docs/openapi.json
+```
+
+Every registered route appears automatically with its method, path and path
+parameters. Enrich a route by passing `doc:` where you register it — works on
+both controller routes and Express-style routes:
+
+```dart
+routes.get('/:id', show,
+    doc: ApiDoc(
+      summary: 'Fetch one user',
+      params: {'id': ApiParam(description: 'The user id', example: 1)},
+      responses: {
+        200: ApiResponse('The user', schema: userSchema),
+        404: ApiResponse('No user with that id'),
+      },
+    ));
+
+routes.post('/', store,
+    doc: ApiDoc(
+      summary: 'Create a user',
+      body: ApiBody(
+        schema: ApiSchema.object(
+          properties: {'name': ApiSchema.string(example: 'Grace Hopper')},
+          required: ['name'],
+        ),
+      ),
+      responses: {201: ApiResponse('Created', schema: userSchema)},
+    ));
+```
+
+`ApiSchema` builds JSON-Schema payload shapes (`object` / `string` / `integer`
+/ `number` / `boolean` / `array`, plus `ApiSchema.raw` as an escape hatch).
+Hide a route with `ApiDoc(hidden: true)`.
+
+**Authentication in the docs UI.** Declare how the API authenticates and
+reference the scheme per route — Swagger UI then shows an **Authorize** button
+and sends the credential with try-it-out requests:
+
+```dart
+app.useOpenApi(
+  title: 'Users API',
+  securitySchemes: {
+    'apiKey': ApiSecurityScheme.apiKey('x-api-key'),  // or .bearer() / .basic()
+  },
+);
+
+routes.post('/', store,
+    guards: [ApiKeyGuard()],
+    doc: ApiDoc(security: ['apiKey'], summary: 'Create a user'));
+```
+
+Useful options on `useOpenApi`: `path:` (default `/docs`), `description:`,
+`servers:` (base URLs shown in the UI), `excludePaths:`, and `enabled:` (docs
+are served in production by default — unlike the dev dashboard — since public
+API docs are usually wanted; pass `enabled: false` to opt out). The UI page
+loads its assets from a CDN; the specification itself is generated and served
+locally, so you can also point any OpenAPI tooling at `/docs/openapi.json`.
 
 ---
 

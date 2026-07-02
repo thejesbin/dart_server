@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dev_tools.dart';
 import 'errors.dart';
 import 'middleware.dart';
+import 'openapi.dart';
 import 'request.dart';
 import 'response.dart';
 import 'router.dart';
@@ -52,6 +53,9 @@ class DartServer {
   ErrorHandler? _errorHandler;
   HttpServer? _httpServer;
   DevTools? _devTools;
+  // The mount path of the OpenAPI docs once useOpenApi has run, for the
+  // startup banner.
+  String? _openApiPath;
 
   /// The active [DevTools] collector once [useDevTools] has enabled it,
   /// otherwise `null`. Useful for inspecting recorded requests in tests.
@@ -69,38 +73,43 @@ class DartServer {
   void use(Middleware middleware) => _middlewares.add(middleware);
 
   /// Registers a [handler] for `GET` requests to [path].
-  void get(String path, Handler handler) => _router.add('GET', path, handler);
+  void get(String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add('GET', path, handler, doc: doc);
 
   /// Registers a [handler] for `POST` requests to [path].
-  void post(String path, Handler handler) => _router.add('POST', path, handler);
+  void post(String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add('POST', path, handler, doc: doc);
 
   /// Registers a [handler] for `PUT` requests to [path].
-  void put(String path, Handler handler) => _router.add('PUT', path, handler);
+  void put(String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add('PUT', path, handler, doc: doc);
 
   /// Registers a [handler] for `DELETE` requests to [path].
-  void delete(String path, Handler handler) =>
-      _router.add('DELETE', path, handler);
+  void delete(String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add('DELETE', path, handler, doc: doc);
 
   /// Registers a [handler] for `PATCH` requests to [path].
-  void patch(String path, Handler handler) =>
-      _router.add('PATCH', path, handler);
+  void patch(String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add('PATCH', path, handler, doc: doc);
 
   /// Registers a [handler] for `HEAD` requests to [path].
-  void head(String path, Handler handler) => _router.add('HEAD', path, handler);
+  void head(String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add('HEAD', path, handler, doc: doc);
 
   /// Registers a [handler] for `OPTIONS` requests to [path].
-  void options(String path, Handler handler) =>
-      _router.add('OPTIONS', path, handler);
+  void options(String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add('OPTIONS', path, handler, doc: doc);
 
   /// Registers a [handler] for [path] regardless of HTTP method.
-  void all(String path, Handler handler) => _router.add('ALL', path, handler);
+  void all(String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add('ALL', path, handler, doc: doc);
 
   /// Registers a [handler] for an arbitrary [method] and [path].
   ///
   /// A lower-level escape hatch behind the verb methods above; also used by
   /// `DartServerFactory` to mount controller routes.
-  void route(String method, String path, Handler handler) =>
-      _router.add(method, path, handler);
+  void route(String method, String path, Handler handler, {ApiDoc? doc}) =>
+      _router.add(method, path, handler, doc: doc);
 
   /// Sets a custom [ErrorHandler] invoked for any uncaught error. If it is
   /// `null` (the default) the framework's built-in handler is used, which maps
@@ -153,6 +162,73 @@ class DartServer {
     return true;
   }
 
+  /// Mounts interactive OpenAPI documentation for every registered route.
+  ///
+  /// Serves the OpenAPI 3.0 specification at `<path>/openapi.json` and an
+  /// interactive documentation UI at [path] (default `/docs`). The
+  /// specification is generated from the live route table — method, path and
+  /// path parameters come for free; enrich individual routes by passing
+  /// `doc: ApiDoc(...)` when registering them.
+  ///
+  /// ```dart
+  /// final app = await DartServerFactory.create(appModule());
+  /// app.useOpenApi(title: 'Blog API', version: '1.0.0');
+  /// // -> http://localhost:3000/docs
+  /// ```
+  ///
+  /// * [servers] lists base URLs shown in the docs (e.g. your prod URL).
+  /// * [securitySchemes] declares how the API authenticates (see
+  ///   [ApiSecurityScheme]); routes reference schemes by name via
+  ///   `ApiDoc(security: [...])`, which gives the docs UI an Authorize button
+  ///   that sends the credential with try-it-out requests.
+  /// * The docs and dev-dashboard routes are excluded from the specification,
+  ///   along with any [excludePaths] prefixes you add.
+  ///
+  /// The specification is built lazily on first request (so routes registered
+  /// after this call are still included) and then cached. Unlike the dev
+  /// dashboard this is not environment-gated — API docs are commonly served
+  /// in production; pass `enabled: false` to turn it off conditionally.
+  ///
+  /// Returns `true` if the docs were mounted.
+  bool useOpenApi({
+    String title = 'API documentation',
+    String version = '1.0.0',
+    String? description,
+    String path = '/docs',
+    List<String> servers = const [],
+    Map<String, ApiSecurityScheme> securitySchemes = const {},
+    List<String> excludePaths = const [],
+    bool enabled = true,
+  }) {
+    if (!enabled) return false;
+
+    Map<String, dynamic>? spec;
+    Map<String, dynamic> buildSpec() => spec ??= OpenApiGenerator.generate(
+          routes: _router.documentedRoutes,
+          title: title,
+          version: version,
+          description: description,
+          servers: servers,
+          securitySchemes: securitySchemes,
+          // Resolved lazily so the dev dashboard is excluded wherever it was
+          // actually mounted, regardless of use* call order.
+          excludePaths: [
+            path,
+            _devTools?.dashboardPath ?? '/__dev',
+            ...excludePaths,
+          ],
+        );
+
+    get('$path/openapi.json', (req) => Response.json(buildSpec()));
+    get(
+        path,
+        (req) => Response.html(swaggerUiTemplate
+            .replaceAll('__SPEC_URL__', '$path/openapi.json')
+            .replaceAll('__TITLE__', title)));
+    _openApiPath = path;
+    return true;
+  }
+
   /// Whether an explicit production-like environment variable is set.
   ///
   /// Checks `DART_SERVER_ENV` / `DART_ENV` / `ENV`; an unset/empty value is
@@ -179,7 +255,8 @@ class DartServer {
   /// Returns the bound [HttpServer]. The future completes once the socket is
   /// listening.
   ///
-  /// By default a one-line startup banner is printed to stdout. Pass
+  /// By default a startup banner is printed to stdout with the server URL —
+  /// plus the API docs and dev-dashboard URLs when those are mounted. Pass
   /// [quiet] `true` to suppress it, or [onReady] to run your own startup logic
   /// instead (which also suppresses the banner).
   Future<HttpServer> listen(
@@ -195,8 +272,22 @@ class DartServer {
     if (onReady != null) {
       onReady(httpServer);
     } else if (!quiet) {
-      stdout.writeln('dart_server listening on '
-          'http://${httpServer.address.host}:${httpServer.port}');
+      // 0.0.0.0/:: aren't clickable in a terminal — link via localhost when
+      // bound to all interfaces.
+      final bound = httpServer.address;
+      final linkHost = (bound.address == InternetAddress.anyIPv4.address ||
+              bound.address == InternetAddress.anyIPv6.address)
+          ? 'localhost'
+          : bound.host;
+      final base = 'http://$linkHost:${httpServer.port}';
+      stdout.writeln('dart_server listening on $base');
+      if (_openApiPath != null) {
+        stdout.writeln('  API docs       $base$_openApiPath  '
+            '(spec: $base$_openApiPath/openapi.json)');
+      }
+      if (_devTools != null) {
+        stdout.writeln('  dev dashboard  $base${_devTools!.dashboardPath}');
+      }
     }
     return httpServer;
   }

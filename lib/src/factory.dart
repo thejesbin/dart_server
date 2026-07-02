@@ -88,6 +88,7 @@ class DartServerFactory {
             // Most specific first: route -> controller -> global.
             filters: [...entry.filters, ...controllerFilters, ...filters],
           ),
+          doc: entry.doc,
         );
       }
     }

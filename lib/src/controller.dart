@@ -1,6 +1,7 @@
 import 'exception_filter.dart';
 import 'guard.dart';
 import 'middleware.dart';
+import 'openapi.dart';
 
 /// A single route declared by a [Controller]: an HTTP [method], a [path]
 /// relative to the controller's [Controller.basePath], its [handler], and any
@@ -15,6 +16,7 @@ class RouteEntry {
     this.middleware = const [],
     this.interceptors = const [],
     this.filters = const [],
+    this.doc,
   });
 
   /// Upper-case HTTP method, e.g. `GET`.
@@ -37,6 +39,9 @@ class RouteEntry {
 
   /// Exception filters for this route only.
   final List<ExceptionFilter> filters;
+
+  /// Optional OpenAPI documentation for this route.
+  final ApiDoc? doc;
 }
 
 /// Collects the routes a [Controller] declares in [Controller.register].
@@ -65,6 +70,7 @@ class RouteRegistrar {
     List<Middleware> middleware,
     List<Middleware> interceptors,
     List<ExceptionFilter> filters,
+    ApiDoc? doc,
   ) {
     entries.add(RouteEntry(
       method,
@@ -74,6 +80,7 @@ class RouteRegistrar {
       middleware: middleware,
       interceptors: interceptors,
       filters: filters,
+      doc: doc,
     ));
   }
 
@@ -85,8 +92,10 @@ class RouteRegistrar {
     List<Middleware> middleware = const [],
     List<Middleware> interceptors = const [],
     List<ExceptionFilter> filters = const [],
+    ApiDoc? doc,
   }) =>
-      _add('GET', path, handler, guards, middleware, interceptors, filters);
+      _add(
+          'GET', path, handler, guards, middleware, interceptors, filters, doc);
 
   /// Registers a `POST` route.
   void post(
@@ -96,8 +105,10 @@ class RouteRegistrar {
     List<Middleware> middleware = const [],
     List<Middleware> interceptors = const [],
     List<ExceptionFilter> filters = const [],
+    ApiDoc? doc,
   }) =>
-      _add('POST', path, handler, guards, middleware, interceptors, filters);
+      _add('POST', path, handler, guards, middleware, interceptors, filters,
+          doc);
 
   /// Registers a `PUT` route.
   void put(
@@ -107,8 +118,10 @@ class RouteRegistrar {
     List<Middleware> middleware = const [],
     List<Middleware> interceptors = const [],
     List<ExceptionFilter> filters = const [],
+    ApiDoc? doc,
   }) =>
-      _add('PUT', path, handler, guards, middleware, interceptors, filters);
+      _add(
+          'PUT', path, handler, guards, middleware, interceptors, filters, doc);
 
   /// Registers a `DELETE` route.
   void delete(
@@ -118,8 +131,10 @@ class RouteRegistrar {
     List<Middleware> middleware = const [],
     List<Middleware> interceptors = const [],
     List<ExceptionFilter> filters = const [],
+    ApiDoc? doc,
   }) =>
-      _add('DELETE', path, handler, guards, middleware, interceptors, filters);
+      _add('DELETE', path, handler, guards, middleware, interceptors, filters,
+          doc);
 
   /// Registers a `PATCH` route.
   void patch(
@@ -129,8 +144,10 @@ class RouteRegistrar {
     List<Middleware> middleware = const [],
     List<Middleware> interceptors = const [],
     List<ExceptionFilter> filters = const [],
+    ApiDoc? doc,
   }) =>
-      _add('PATCH', path, handler, guards, middleware, interceptors, filters);
+      _add('PATCH', path, handler, guards, middleware, interceptors, filters,
+          doc);
 
   /// Registers a `HEAD` route.
   void head(
@@ -140,8 +157,10 @@ class RouteRegistrar {
     List<Middleware> middleware = const [],
     List<Middleware> interceptors = const [],
     List<ExceptionFilter> filters = const [],
+    ApiDoc? doc,
   }) =>
-      _add('HEAD', path, handler, guards, middleware, interceptors, filters);
+      _add('HEAD', path, handler, guards, middleware, interceptors, filters,
+          doc);
 
   /// Registers an `OPTIONS` route.
   void options(
@@ -151,8 +170,10 @@ class RouteRegistrar {
     List<Middleware> middleware = const [],
     List<Middleware> interceptors = const [],
     List<ExceptionFilter> filters = const [],
+    ApiDoc? doc,
   }) =>
-      _add('OPTIONS', path, handler, guards, middleware, interceptors, filters);
+      _add('OPTIONS', path, handler, guards, middleware, interceptors, filters,
+          doc);
 
   /// Registers a route matching any method.
   void all(
@@ -162,8 +183,10 @@ class RouteRegistrar {
     List<Middleware> middleware = const [],
     List<Middleware> interceptors = const [],
     List<ExceptionFilter> filters = const [],
+    ApiDoc? doc,
   }) =>
-      _add('ALL', path, handler, guards, middleware, interceptors, filters);
+      _add(
+          'ALL', path, handler, guards, middleware, interceptors, filters, doc);
 }
 
 /// Base class for a controller — a cohesive group of routes under a common

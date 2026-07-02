@@ -337,6 +337,37 @@ void main() {
       expect(lines.any((l) => l.contains('GET /ok 200')), isTrue);
       expect(lines.any((l) => l.contains('GET /boom 500')), isTrue);
     });
+
+    test('does not log dev-dashboard polling traffic', () async {
+      final lines = <String>[];
+      app.useDevTools(enabled: true);
+      app.use(logger(log: lines.add));
+      app.get('/real', (req) => Response.text('ok'));
+      await start();
+
+      await send('GET', '/real');
+      await send('GET', '/__dev/api');
+      await send('GET', '/__dev/api');
+
+      expect(lines.any((l) => l.contains('GET /real 200')), isTrue);
+      expect(lines.where((l) => l.contains('/__dev')), isEmpty,
+          reason: 'dashboard polling must not spam the logs');
+    });
+
+    test('ignorePaths silences configured prefixes', () async {
+      final lines = <String>[];
+      app.use(logger(log: lines.add, ignorePaths: ['/health']));
+      app.get('/health', (req) => Response.json({'status': 'ok'}));
+      app.get('/healthy-snacks', (req) => Response.text('logged'));
+      await start();
+
+      await send('GET', '/health');
+      await send('GET', '/healthy-snacks');
+
+      expect(lines.where((l) => l.contains('GET /health 200')), isEmpty);
+      expect(lines.any((l) => l.contains('GET /healthy-snacks 200')), isTrue,
+          reason: 'prefix match must be per-segment, not per-character');
+    });
   });
 
   group('serveStatic', () {

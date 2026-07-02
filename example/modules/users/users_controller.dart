@@ -20,16 +20,57 @@ class UsersController extends Controller {
   @override
   String get basePath => '/users';
 
+  /// The user payload shape, shared by the OpenAPI docs below.
+  static final _userSchema = ApiSchema.object(
+    properties: {
+      'id': ApiSchema.integer(example: 1),
+      'name': ApiSchema.string(example: 'Ada Lovelace'),
+    },
+    required: ['id', 'name'],
+  );
+
   /// Declares the routes; paths here are relative to [basePath].
   ///
-  /// Routes can attach guards, interceptors, middleware and exception filters
-  /// — here the write route is protected by [ApiKeyGuard] while reads stay
+  /// Routes can attach guards, interceptors, middleware, exception filters —
+  /// and `doc:` metadata that enriches the generated OpenAPI docs at `/docs`.
+  /// Here the write route is protected by [ApiKeyGuard] while reads stay
   /// public.
   @override
   void register(RouteRegistrar routes) {
-    routes.get('/', index);
-    routes.get('/:id', show);
-    routes.post('/', store, guards: [ApiKeyGuard()]);
+    routes.get('/', index,
+        doc: ApiDoc(
+          summary: 'List all users',
+          responses: {200: ApiResponse('Every user in the store')},
+        ));
+    routes.get('/:id', show,
+        doc: ApiDoc(
+          summary: 'Fetch one user',
+          params: {'id': ApiParam(description: 'The user id', example: 1)},
+          responses: {
+            200: ApiResponse('The user', schema: _userSchema),
+            404: ApiResponse('No user with that id'),
+          },
+        ));
+    routes.post('/', store,
+        guards: [ApiKeyGuard()],
+        doc: ApiDoc(
+          summary: 'Create a user',
+          description: 'Requires the `x-api-key` header (see ApiKeyGuard).',
+          // References the scheme declared in useOpenApi — Swagger UI shows a
+          // lock icon and sends the key from its Authorize dialog.
+          security: ['apiKey'],
+          body: ApiBody(
+            schema: ApiSchema.object(
+              properties: {'name': ApiSchema.string(example: 'Grace Hopper')},
+              required: ['name'],
+            ),
+          ),
+          responses: {
+            201: ApiResponse('The created user', schema: _userSchema),
+            400: ApiResponse('Missing or empty name'),
+            401: ApiResponse('Missing x-api-key header'),
+          },
+        ));
   }
 
   /// `GET /users` — list every user.

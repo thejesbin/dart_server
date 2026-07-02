@@ -1,4 +1,5 @@
 import 'middleware.dart';
+import 'openapi.dart';
 import 'utils.dart';
 
 /// A single registered route: an HTTP [method], a path [pattern] and the
@@ -21,8 +22,11 @@ class Route {
   /// The pattern split into segments, computed once at registration time.
   final List<String> segments;
 
+  /// Optional OpenAPI documentation attached at registration.
+  final ApiDoc? doc;
+
   /// Creates a route, validating that a wildcard only ends the pattern.
-  Route(String method, this.pattern, this.handler)
+  Route(String method, this.pattern, this.handler, {this.doc})
       : method = method.toUpperCase(),
         segments = splitPath(pattern) {
     for (var i = 0; i < segments.length; i++) {
@@ -54,15 +58,22 @@ class RouteMatch {
 class Router {
   final List<Route> _routes = [];
 
-  /// Registers [handler] for [method] requests to [path].
-  void add(String method, String path, Handler handler) {
-    _routes.add(Route(method, path, handler));
+  /// Registers [handler] for [method] requests to [path], with optional
+  /// OpenAPI documentation.
+  void add(String method, String path, Handler handler, {ApiDoc? doc}) {
+    _routes.add(Route(method, path, handler, doc: doc));
   }
 
   /// The registered routes as `(method, pattern)` records, in registration
   /// order. Used by the dev dashboard to list the route table.
   List<({String method, String pattern})> get registeredRoutes =>
       _routes.map((r) => (method: r.method, pattern: r.pattern)).toList();
+
+  /// The registered routes with their documentation metadata, in registration
+  /// order. Used by the OpenAPI generator.
+  List<DocumentedRoute> get documentedRoutes => _routes
+      .map((r) => (method: r.method, pattern: r.pattern, doc: r.doc))
+      .toList();
 
   /// Finds the first route matching [method] and [path], or `null` if none do.
   ///

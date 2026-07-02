@@ -47,6 +47,21 @@ typedef ErrorHandler = FutureOr<Response> Function(
   StackTrace stackTrace,
 );
 
+/// The `req.context` key the framework sets to `true` on its own internal
+/// traffic (currently the dev dashboard's polling requests), so logging
+/// middleware can keep it out of the application logs.
+///
+/// Your own middleware can check it too:
+///
+/// ```dart
+/// app.use((req, next) {
+///   if (req.context[internalRequestMarker] == true) return next();
+///   // ... real traffic only ...
+///   return next();
+/// });
+/// ```
+const String internalRequestMarker = 'dart_server.internal';
+
 /// A request/response logging middleware.
 ///
 /// Logs one line per request with the method, path, status code and the time
@@ -57,14 +72,28 @@ typedef ErrorHandler = FutureOr<Response> Function(
 /// GET /users/42 200 3ms
 /// ```
 ///
+/// The dev dashboard's own polling traffic (marked with
+/// [internalRequestMarker]) is not logged, so it can't drown out your
+/// application's requests; pass [logInternal] `true` to include it.
+///
 /// * [log] receives each formatted line (defaults to `stdout.writeln`).
 /// * Set [includeTimestamp] to prefix each line with an ISO-8601 timestamp.
+/// * [ignorePaths] silences other noisy endpoints by prefix, e.g.
+///   `ignorePaths: ['/health']`.
 Middleware logger({
   void Function(String line)? log,
   bool includeTimestamp = false,
+  List<String> ignorePaths = const [],
+  bool logInternal = false,
 }) {
   final write = log ?? stdout.writeln;
   return (req, next) async {
+    if (!logInternal && req.context[internalRequestMarker] == true) {
+      return next();
+    }
+    if (ignorePaths.any((p) => req.path == p || req.path.startsWith('$p/'))) {
+      return next();
+    }
     final stopwatch = Stopwatch()..start();
     Response res;
     try {
