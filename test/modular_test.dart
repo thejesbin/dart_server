@@ -55,8 +55,8 @@ void main() {
       );
 
       final app = await DartServerFactory.create(module);
-      final server =
-          await app.listen(0, address: InternetAddress.loopbackIPv4, quiet: true);
+      final server = await app.listen(0,
+          address: InternetAddress.loopbackIPv4, quiet: true);
       addTearDown(() => app.close(force: true));
 
       final body = await _get(server, '/greet');
@@ -156,8 +156,8 @@ void main() {
       );
 
       final app = await DartServerFactory.create(appModule);
-      final server =
-          await app.listen(0, address: InternetAddress.loopbackIPv4, quiet: true);
+      final server = await app.listen(0,
+          address: InternetAddress.loopbackIPv4, quiet: true);
       addTearDown(() => app.close(force: true));
 
       expect(jsonDecode(await _get(server, '/greet')), {'message': 'hello #1'});
@@ -198,8 +198,8 @@ void main() {
       final appModule = Module(imports: [coreModule, featureModule]);
 
       final app = await DartServerFactory.create(appModule);
-      final server =
-          await app.listen(0, address: InternetAddress.loopbackIPv4, quiet: true);
+      final server = await app.listen(0,
+          address: InternetAddress.loopbackIPv4, quiet: true);
       addTearDown(() => app.close(force: true));
 
       expect(jsonDecode(await _get(server, '/greet')), {'message': 'hello #1'});
@@ -210,8 +210,8 @@ void main() {
     test('basePath is joined with each route path', () async {
       final module = Module(controllers: [(i) => RootController()]);
       final app = await DartServerFactory.create(module);
-      final server =
-          await app.listen(0, address: InternetAddress.loopbackIPv4, quiet: true);
+      final server = await app.listen(0,
+          address: InternetAddress.loopbackIPv4, quiet: true);
       addTearDown(() => app.close(force: true));
 
       expect(await _get(server, '/'), 'root');

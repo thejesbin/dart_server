@@ -279,7 +279,8 @@ class DevTools {
     return 'other';
   }
 
-  String _renderHtml() => _dashboardTemplate.replaceAll('__DEV_PATH__', dashboardPath);
+  String _renderHtml() =>
+      _dashboardTemplate.replaceAll('__DEV_PATH__', dashboardPath);
 }
 
 /// Self-contained dashboard page. `__DEV_PATH__` is replaced with the mount

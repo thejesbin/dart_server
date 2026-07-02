@@ -43,8 +43,8 @@ void main() {
 
   /// Binds the app to an ephemeral loopback port for the test.
   Future<void> start() async {
-    server = await app.listen(0, address: InternetAddress.loopbackIPv4,
-        quiet: true);
+    server =
+        await app.listen(0, address: InternetAddress.loopbackIPv4, quiet: true);
   }
 
   group('routing', () {
@@ -70,7 +70,8 @@ void main() {
       app.get('/search', (req) => Response.json({'q': req.query['q']}));
       await start();
 
-      expect(jsonDecode((await send('GET', '/search?q=dart')).body), {'q': 'dart'});
+      expect(jsonDecode((await send('GET', '/search?q=dart')).body),
+          {'q': 'dart'});
     });
 
     test('trailing wildcard captures the remainder into params["*"]', () async {
@@ -154,7 +155,8 @@ void main() {
       expect(jsonDecode(res.body), {'first': true, 'second': true});
     });
 
-    test('request body larger than maxBodyBytes is rejected with 413', () async {
+    test('request body larger than maxBodyBytes is rejected with 413',
+        () async {
       app = DartServer(maxBodyBytes: 16);
       app.post('/upload', (req) => Response.text('ok'));
       await start();
@@ -204,7 +206,8 @@ void main() {
 
       final res = await send('GET', '/boom');
       expect(res.status, 404);
-      expect(observed?.statusCode, 404, reason: 'middleware sees error response');
+      expect(observed?.statusCode, 404,
+          reason: 'middleware sees error response');
     });
   });
 
@@ -449,7 +452,8 @@ void main() {
       await send('GET', '/boom');
       final api = jsonDecode((await send('GET', '/__dev/api')).body)
           as Map<String, dynamic>;
-      final boom = (api['requests'] as List).firstWhere((r) => r['path'] == '/boom');
+      final boom =
+          (api['requests'] as List).firstWhere((r) => r['path'] == '/boom');
       expect(boom['status'], 404);
     });
 
@@ -464,8 +468,7 @@ void main() {
 
       var api = jsonDecode((await send('GET', '/__dev/api')).body)
           as Map<String, dynamic>;
-      final paths =
-          (api['requests'] as List).map((r) => r['path']).toSet();
+      final paths = (api['requests'] as List).map((r) => r['path']).toSet();
       expect(paths, contains('/x'));
       expect(paths.any((p) => p.toString().startsWith('/__dev')), isFalse);
 

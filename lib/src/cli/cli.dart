@@ -67,9 +67,7 @@ Future<int> _create(Console console, _Args args) async {
   }
   final pkg = toSnakeCase(rawName);
   final dir = Directory(pkg);
-  if (dir.existsSync() &&
-      dir.listSync().isNotEmpty &&
-      !args.flag('force')) {
+  if (dir.existsSync() && dir.listSync().isNotEmpty && !args.flag('force')) {
     console.error('Directory "$pkg" already exists and is not empty. '
         'Use --force to write into it anyway.');
     return 1;
@@ -202,8 +200,7 @@ int _emitMiddleware(Console console, String root, _Args args, String name) {
   final base = _stripSuffix(name, const ['middleware']);
   return _write(console, root, args,
       relative: 'lib/middleware/${toSnakeCase(base)}_middleware.dart',
-      content:
-          templates.middlewareFile(toPascalCase(base), toCamelCase(base)));
+      content: templates.middlewareFile(toPascalCase(base), toCamelCase(base)));
 }
 
 int _emitGuard(Console console, String root, _Args args, String name) {
@@ -331,7 +328,8 @@ Future<int> _run(
       '${port != null ? ' on port $port' : ''}'
       '${watch ? ' — watching lib/ and bin/ for changes' : ''}');
 
-  return _spawnServer(console, root: root, entry: entry, env: env, watch: watch);
+  return _spawnServer(console,
+      root: root, entry: entry, env: env, watch: watch);
 }
 
 Future<int> _spawnServer(
@@ -444,8 +442,9 @@ List<String> _tokenize(String input) {
       .toList();
 }
 
-String _capitalize(String word) =>
-    word.isEmpty ? word : word[0].toUpperCase() + word.substring(1).toLowerCase();
+String _capitalize(String word) => word.isEmpty
+    ? word
+    : word[0].toUpperCase() + word.substring(1).toLowerCase();
 
 /// `user_profile` / `userProfile` -> `UserProfile`.
 String toPascalCase(String input) => _tokenize(input).map(_capitalize).join();
@@ -453,7 +452,9 @@ String toPascalCase(String input) => _tokenize(input).map(_capitalize).join();
 /// `user_profile` / `UserProfile` -> `userProfile`.
 String toCamelCase(String input) {
   final pascal = toPascalCase(input);
-  return pascal.isEmpty ? pascal : pascal[0].toLowerCase() + pascal.substring(1);
+  return pascal.isEmpty
+      ? pascal
+      : pascal[0].toLowerCase() + pascal.substring(1);
 }
 
 /// `UserProfile` / `user-profile` -> `user_profile`.

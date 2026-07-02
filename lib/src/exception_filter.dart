@@ -41,7 +41,8 @@ abstract interface class ExceptionFilter {
   /// Creates an [ExceptionFilter] from a function — convenient for inline
   /// filters.
   factory ExceptionFilter.from(
-    FutureOr<Response?> Function(Request req, Object error, StackTrace stackTrace)
+    FutureOr<Response?> Function(
+            Request req, Object error, StackTrace stackTrace)
         handle,
   ) = _FunctionExceptionFilter;
 }
@@ -53,6 +54,7 @@ class _FunctionExceptionFilter implements ExceptionFilter {
       Request req, Object error, StackTrace stackTrace) _handle;
 
   @override
-  FutureOr<Response?> handle(Request req, Object error, StackTrace stackTrace) =>
+  FutureOr<Response?> handle(
+          Request req, Object error, StackTrace stackTrace) =>
       _handle(req, error, stackTrace);
 }
